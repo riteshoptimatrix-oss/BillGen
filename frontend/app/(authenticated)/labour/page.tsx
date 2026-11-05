@@ -43,90 +43,14 @@ interface Labour {
   joining_date?: string;
 }
 
-// Fallback sample directory
-const DEFAULT_LABOURS: Labour[] = [
-  {
-    _id: "lbr-001",
-    name: "Rameshwar Patel",
-    labour_id: "LBR-0001",
-    mobile_number: "+91 98241 12345",
-    address: "Bapunagar, Ahmedabad, Gujarat",
-    salary: 24000,
-    status: "Active",
-    work_type: "Full Time",
-    joining_date: "2026-11-05",
-    image: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=300&auto=format&fit=crop&q=80",
-    aadhar_image: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Aadhaar_Logo.svg/640px-Aadhaar_Logo.svg.png",
-  },
-  {
-    _id: "lbr-002",
-    name: "Sunil Kumar Vishwakarma",
-    labour_id: "LBR-0002",
-    mobile_number: "+91 97234 56789",
-    address: "Vatva GIDC, Ahmedabad, Gujarat",
-    salary: 26500,
-    status: "Active",
-    work_type: "Full Time",
-    joining_date: "2026-10-12",
-    image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80",
-  },
-  {
-    _id: "lbr-003",
-    name: "Manojbhai Parmar",
-    labour_id: "LBR-0003",
-    mobile_number: "+91 96385 27410",
-    address: "Odhav Industrial Area, Ahmedabad, Gujarat",
-    salary: 21000,
-    status: "Active",
-    work_type: "Full Time",
-    joining_date: "2026-09-18",
-    image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300&auto=format&fit=crop&q=80",
-  },
-  {
-    _id: "lbr-004",
-    name: "Deepak Yadav",
-    labour_id: "LBR-0004",
-    mobile_number: "+91 95123 48765",
-    address: "Changodar, Ahmedabad, Gujarat",
-    salary: 22500,
-    status: "On Leave",
-    work_type: "Part Time",
-    joining_date: "2026-08-24",
-    image: "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=300&auto=format&fit=crop&q=80",
-  },
-  {
-    _id: "lbr-005",
-    name: "Mohammad Rizwan Ansari",
-    labour_id: "LBR-0005",
-    mobile_number: "+91 98980 41238",
-    address: "Naroda GIDC, Ahmedabad, Gujarat",
-    salary: 28000,
-    status: "Active",
-    work_type: "Full Time",
-    joining_date: "2026-07-15",
-    image: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=300&auto=format&fit=crop&q=80",
-  },
-  {
-    _id: "lbr-006",
-    name: "Kailash Chand Sharma",
-    labour_id: "LBR-0006",
-    mobile_number: "+91 94265 89123",
-    address: "Amraiwadi, Ahmedabad, Gujarat",
-    salary: 20000,
-    status: "Inactive",
-    work_type: "Daily Wage",
-    joining_date: "2026-05-02",
-    image: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=300&auto=format&fit=crop&q=80",
-  },
-];
-
 type FilterTab = "All" | "Active" | "Leave" | "Inactive";
 
 export default function LabourManagementPage() {
-  const [labours, setLabours] = useState<Labour[]>(DEFAULT_LABOURS);
-  const [activeLabourId, setActiveLabourId] = useState<string>("lbr-001");
+  const [labours, setLabours] = useState<Labour[]>([]);
+  const [activeLabourId, setActiveLabourId] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterTab>("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isCreateMode, setIsCreateMode] = useState(false);
 
@@ -135,43 +59,49 @@ export default function LabourManagementPage() {
 
   // Form State for Active Labour
   const [formData, setFormData] = useState({
-    name: "Rameshwar Patel",
-    labour_id: "LBR-0001",
+    name: "",
+    labour_id: "",
     country_code: "+91",
-    mobile_number: "98241 12345",
-    address: "Bapunagar, Ahmedabad, Gujarat",
-    salary: 24000,
-    joining_date: "2026-11-05",
+    mobile_number: "",
+    address: "",
+    salary: 0,
+    joining_date: "",
     work_type: "Full Time",
     status: "Active" as string,
-    image: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=300&auto=format&fit=crop&q=80",
-    aadhar_image: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Aadhaar_Logo.svg/640px-Aadhaar_Logo.svg.png",
+    image: "",
+    aadhar_image: "",
   });
 
   const fetchLabours = async () => {
+    setIsLoading(true);
     try {
       const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/labours/`);
       if (res.ok) {
         const data = await res.json();
-        if (data && data.length > 0) {
-          const enriched: Labour[] = data.map((l: any, idx: number) => ({
-            ...l,
-            labour_id: l.labour_id || `LBR-000${idx + 1}`,
-            status: l.status || (idx === 3 ? "On Leave" : idx === 5 ? "Inactive" : "Active"),
-            work_type: l.work_type || "Full Time",
-            joining_date: l.joining_date || "2026-11-05",
-            image: l.image || DEFAULT_LABOURS[idx % DEFAULT_LABOURS.length]?.image || "",
-            aadhar_image: l.aadhar_image || (idx === 0 ? DEFAULT_LABOURS[0].aadhar_image : ""),
-          }));
-          setLabours(enriched);
-          if (!activeLabourId || activeLabourId === "lbr-001") {
-            populateLabourForm(enriched[0]);
-          }
+        const realLabours: Labour[] = (data || []).map((l: any, idx: number) => ({
+          ...l,
+          labour_id: l.labour_id || `LBR-${String(idx + 1).padStart(4, "0")}`,
+          status: l.status || "Active",
+          work_type: l.work_type || "Full Time",
+          joining_date: l.joining_date || "",
+          image: l.image || "",
+          aadhar_image: l.aadhar_image || "",
+        }));
+        setLabours(realLabours);
+        if (realLabours.length > 0) {
+          populateLabourForm(realLabours[0]);
+        } else {
+          setActiveLabourId(null);
         }
+      } else {
+        setLabours([]);
       }
     } catch (e) {
-      console.warn("Using default rich labour data due to connection:", e);
+      console.error("Failed to fetch labour data from database:", e);
+      setLabours([]);
+    } finally {
+      setIsLoading(false);
     }
   };
 

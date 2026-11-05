@@ -48,7 +48,14 @@ async def lifespan(app: FastAPI):
     mongodb_url = os.getenv("MONGODB_URI") or os.getenv("MONGODB_URL", "mongodb://localhost:27017")
     db_name = os.getenv("MONGODB_DB_NAME", "bill_generator_db")
     
-    app.mongodb_client = AsyncIOMotorClient(mongodb_url)
+    client_kwargs = {}
+    try:
+        import certifi
+        client_kwargs["tlsCAFile"] = certifi.where()
+    except Exception as e:
+        logger.warning(f"Could not load certifi CA file: {e}")
+
+    app.mongodb_client = AsyncIOMotorClient(mongodb_url, **client_kwargs)
     app.mongodb = app.mongodb_client.get_database(db_name)
     logger.info(f"Secure connection initialized to database: {db_name}")
     yield

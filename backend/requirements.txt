@@ -11,3 +11,4 @@ PyJWT
 passlib
 bcrypt
 pydantic[email]
+certifi

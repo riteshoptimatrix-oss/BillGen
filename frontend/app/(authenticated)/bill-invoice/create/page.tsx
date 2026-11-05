@@ -65,18 +65,16 @@ export default function CreateInvoicePage() {
   const [companyEmail, setCompanyEmail] = useState("contact@siddhivinayakenterprise.com");
   const [companyGstin, setCompanyGstin] = useState("24AAAFO1234F1Z9");
 
-  // 2. Customer Information (Auto-fillable + Fully Editable)
+  // 2. Customer Information (Auto-fillable from Database + Fully Editable)
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
-  const [clientName, setClientName] = useState("Jonathan Manathon");
-  const [companyClientName, setCompanyClientName] = useState("Gujarat Auto Spares & Body Works");
-  const [clientPhone, setClientPhone] = useState("+91 98250 14829");
-  const [clientAddress, setClientAddress] = useState(
-    "Plot 42, GIDC Industrial Estate, Odhav, Ahmedabad, Gujarat 382415"
-  );
-  const [clientGst, setClientGst] = useState("24AABCG1234F1Z8");
+  const [clientName, setClientName] = useState("");
+  const [companyClientName, setCompanyClientName] = useState("");
+  const [clientPhone, setClientPhone] = useState("");
+  const [clientAddress, setClientAddress] = useState("");
+  const [clientGst, setClientGst] = useState("");
 
   // 3. Invoice Meta
-  const [invoiceNumber, setInvoiceNumber] = useState("INV-2026-0005");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [paymentTerms, setPaymentTerms] = useState("15 Days");
   const [customTermsDays, setCustomTermsDays] = useState<number>(15);
@@ -84,36 +82,8 @@ export default function CreateInvoicePage() {
   const [taxRate, setTaxRate] = useState<number>(18);
   const [discountAmount, setDiscountAmount] = useState<number>(0);
 
-  // 4. Products / Items List (Dynamic)
-  const [items, setItems] = useState<InvoiceItem[]>([
-    {
-      item_no: "01",
-      product_name: "Auto Rickshaw Heavy-Duty Tubular Chassis Frame",
-      description: "High-tensile mild steel tubular chassis, anti-corrosive electrophoretic primer coated.",
-      image: "http://localhost:8000/uploads/auto_rickshaw_chassis.jpg",
-      quantity: 2,
-      unit_price: 18500,
-      total: 37000
-    },
-    {
-      item_no: "02",
-      product_name: "200cc 4-Stroke CNG/Petrol Engine & Gearbox Assembly",
-      description: "Single-cylinder 4-stroke 198.6cc engine unit with integrated 4-speed gearbox & reverse gear.",
-      image: "http://localhost:8000/uploads/auto_rickshaw_engine.jpg",
-      quantity: 1,
-      unit_price: 34500,
-      total: 34500
-    },
-    {
-      item_no: "03",
-      product_name: "Heavy-Duty Rear Differential Axle Assembly",
-      description: "Precision-machined rear differential axle with hypoid crown wheel & pinion gear set.",
-      image: "http://localhost:8000/uploads/auto_rickshaw_differential.jpg",
-      quantity: 2,
-      unit_price: 14800,
-      total: 29600
-    }
-  ]);
+  // 4. Products / Items List (Dynamic from Database)
+  const [items, setItems] = useState<InvoiceItem[]>([]);
 
   // Product Dropdown & Add line State
   const [selectedProductToAdd, setSelectedProductToAdd] = useState<ProductOption | null>(null);
@@ -986,7 +956,13 @@ export default function CreateInvoicePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {items.map((it, idx) => (
+                  {items.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-xs text-gray-400">
+                        No items added yet. Search and select products above to add them to this invoice.
+                      </td>
+                    </tr>
+                  ) : items.map((it, idx) => (
                     <tr key={idx} className="hover:bg-gray-50/50">
                       <td className="py-2.5 px-3 text-center font-mono text-gray-400 font-bold align-top pt-3">
                         {it.item_no}
@@ -1432,7 +1408,13 @@ export default function CreateInvoicePage() {
 
                       <tbody className="divide-y divide-gray-300 text-gray-800 bg-white">
                         {/* Dynamic User Entered Items */}
-                        {items.map((it, idx) => (
+                        {items.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="py-8 text-center text-xs text-gray-400 italic">
+                              No items added to invoice yet.
+                            </td>
+                          </tr>
+                        ) : items.map((it, idx) => (
                           <tr key={idx} className="min-h-[54px] hover:bg-slate-50/30">
                             {/* Sr. No */}
                             <td className="py-2 px-3 border-r border-gray-300 text-center font-bold text-slate-700 font-mono text-xs align-top">
