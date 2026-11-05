@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Body, Request, HTTPException, status
+import os
+import aiofiles
+from fastapi import APIRouter, Body, Request, HTTPException, status, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any
 from models import Invoice, InvoiceCreate, InvoiceUpdate
@@ -6,6 +8,49 @@ from bson import ObjectId
 from datetime import datetime
 
 router = APIRouter(prefix="/api/invoices", tags=["invoices"])
+
+@router.post("/upload-pdf", response_description="Upload generated Invoice PDF for direct online sharing")
+async def upload_invoice_pdf(
+    request: Request,
+    file: UploadFile = File(...),
+    invoice_number: str = Form(""),
+    invoice_id: str = Form("")
+):
+    # Ensure destination directories exist
+    backend_invoices_dir = os.path.abspath("uploads/invoices")
+    os.makedirs(backend_invoices_dir, exist_ok=True)
+    root_invoices_dir = os.path.abspath(os.path.join("..", "uploads", "invoices"))
+    try:
+        os.makedirs(root_invoices_dir, exist_ok=True)
+    except Exception:
+        pass
+
+    clean_num = invoice_number.replace("/", "_").replace("\\", "_").replace(" ", "_") if invoice_number else "invoice"
+    filename = f"Invoice_{clean_num}.pdf"
+    file_path = os.path.join(backend_invoices_dir, filename)
+
+    content = await file.read()
+    async with aiofiles.open(file_path, "wb") as f:
+        await f.write(content)
+
+    # Also sync to root uploads if accessible
+    try:
+        root_path = os.path.join(root_invoices_dir, filename)
+        async with aiofiles.open(root_path, "wb") as rf:
+            await rf.write(content)
+    except Exception:
+        pass
+
+    base_url = str(request.base_url).rstrip("/")
+    pdf_url = f"{base_url}/uploads/invoices/{filename}"
+
+    if invoice_id and ObjectId.is_valid(invoice_id):
+        await request.app.mongodb["invoices"].update_one(
+            {"_id": ObjectId(invoice_id)},
+            {"$set": {"pdf_url": pdf_url}}
+        )
+
+    return {"url": pdf_url, "filename": filename, "status": "success"}
 
 async def get_next_invoice_number_internal(mongodb) -> str:
     current_year = datetime.now().year

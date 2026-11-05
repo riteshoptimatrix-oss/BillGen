@@ -19,6 +19,7 @@ import {
   Filter,
   ArrowUpDown,
   ChevronRight,
+  ChevronLeft,
   Camera,
   Users,
   UserCheck,
@@ -42,7 +43,7 @@ interface Labour {
   joining_date?: string;
 }
 
-// Fallback high-fidelity sample directory matching the reference image
+// Fallback sample directory
 const DEFAULT_LABOURS: Labour[] = [
   {
     _id: "lbr-001",
@@ -129,6 +130,9 @@ export default function LabourManagementPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isCreateMode, setIsCreateMode] = useState(false);
 
+  // In mobile view, ALWAYS default to "directory" so the user sees the list first
+  const [mobileView, setMobileView] = useState<"directory" | "detail">("directory");
+
   // Form State for Active Labour
   const [formData, setFormData] = useState({
     name: "Rameshwar Patel",
@@ -151,7 +155,6 @@ export default function LabourManagementPage() {
       if (res.ok) {
         const data = await res.json();
         if (data && data.length > 0) {
-          // Merge API data with enhanced fields if missing
           const enriched: Labour[] = data.map((l: any, idx: number) => ({
             ...l,
             labour_id: l.labour_id || `LBR-000${idx + 1}`,
@@ -163,7 +166,7 @@ export default function LabourManagementPage() {
           }));
           setLabours(enriched);
           if (!activeLabourId || activeLabourId === "lbr-001") {
-            selectLabour(enriched[0]);
+            populateLabourForm(enriched[0]);
           }
         }
       }
@@ -176,11 +179,8 @@ export default function LabourManagementPage() {
     fetchLabours();
   }, []);
 
-  const selectLabour = (labour: Labour) => {
-    setIsCreateMode(false);
+  const populateLabourForm = (labour: Labour) => {
     setActiveLabourId(labour._id || (labour.id as string));
-
-    // Parse mobile number into country code + number
     let rawPhone = (labour.mobile_number || "").trim();
     let code = "+91";
     let phone = rawPhone;
@@ -204,6 +204,13 @@ export default function LabourManagementPage() {
     });
   };
 
+  const selectLabour = (labour: Labour) => {
+    setIsCreateMode(false);
+    populateLabourForm(labour);
+    // Switch to profile view on mobile
+    setMobileView("detail");
+  };
+
   const handleCreateNew = () => {
     setIsCreateMode(true);
     const nextId = `LBR-000${labours.length + 1}`;
@@ -220,6 +227,7 @@ export default function LabourManagementPage() {
       image: "",
       aadhar_image: "",
     });
+    setMobileView("detail");
   };
 
   const handleImageUpload = async (
@@ -229,7 +237,6 @@ export default function LabourManagementPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Fast local preview
     const previewUrl = URL.createObjectURL(file);
     if (type === "avatar") {
       setFormData((prev) => ({ ...prev, image: previewUrl }));
@@ -237,7 +244,6 @@ export default function LabourManagementPage() {
       setFormData((prev) => ({ ...prev, aadhar_image: previewUrl }));
     }
 
-    // Background upload to FastAPI backend
     try {
       const uploadData = new FormData();
       uploadData.append("file", file);
@@ -291,12 +297,11 @@ export default function LabourManagementPage() {
         if (res.ok) {
           const created = await res.json();
           await fetchLabours();
-          selectLabour(created);
+          populateLabourForm(created);
         } else {
-          // Local fallback addition
           const newLab: Labour = { ...payload, _id: `lbr-local-${Date.now()}` };
           setLabours((prev) => [newLab, ...prev]);
-          selectLabour(newLab);
+          populateLabourForm(newLab);
         }
       } else {
         const res = await fetch(`${apiUrl}/labours/${activeLabourId}`, {
@@ -307,7 +312,6 @@ export default function LabourManagementPage() {
         if (res.ok) {
           await fetchLabours();
         } else {
-          // Local state update
           setLabours((prev) =>
             prev.map((l) =>
               (l._id || l.id) === activeLabourId ? { ...l, ...payload } : l
@@ -325,6 +329,8 @@ export default function LabourManagementPage() {
     } finally {
       setIsSaving(false);
       setIsCreateMode(false);
+      // Automatically redirect back to the Labour Directory on mobile!
+      setMobileView("directory");
     }
   };
 
@@ -345,56 +351,58 @@ export default function LabourManagementPage() {
     });
   }, [labours, searchQuery, activeFilter]);
 
-  // Counts for KPI Cards matching the mockup
-  const totalCount = 24; // Mockup exact KPI numbers
-  const activeCount = 20;
-  const leaveCount = 2;
-  const inactiveCount = 2;
+  const totalCount = labours.length || 24;
+  const activeCount = labours.filter((l) => l.status === "Active").length || 20;
+  const leaveCount = labours.filter((l) => l.status === "On Leave").length || 2;
+  const inactiveCount = labours.filter((l) => l.status === "Inactive").length || 2;
 
   return (
-    <div className="space-y-6 pb-12 font-sans w-full max-w-full">
+    <div className="space-y-5 sm:space-y-6 pb-12 font-sans w-full max-w-full overflow-x-hidden">
       {/* ========================================================= */}
-      {/* 1. TOP HEADER (Fully responsive on mobile and desktop)    */}
+      {/* 1. TOP HEADER (Responsive on mobile and desktop)          */}
       {/* ========================================================= */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-[#5c341f]/10 text-[#5c341f] flex items-center justify-center shrink-0 border border-[#ede5dd] shadow-xs">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3.5 sm:gap-4">
+        <div className="flex items-start gap-2.5 sm:gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-[#0260de]/10 text-[#0260de] flex items-center justify-center shrink-0 border border-[#e2e8f0] shadow-xs">
             <HardHat className="w-5 h-5 stroke-[2.2]" />
           </div>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-[#23160e] tracking-tight">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-[#0f172a] tracking-tight">
               Labour Management
             </h1>
-            <p className="text-xs sm:text-sm text-[#8a7566] font-medium mt-0.5">
-              Manage labour information, wages, documents and employment details.
+            <p className="text-xs sm:text-sm text-[#64748b] font-medium mt-0.5 line-clamp-1 sm:line-clamp-none">
+              Manage labour directory, wages, documents and staff profiles.
             </p>
           </div>
         </div>
 
-        {/* Action Buttons: Import, Export, + Add Labour */}
-        <div className="flex items-center gap-2 sm:gap-2.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+        {/* Action Buttons: Import & Export hidden in mobile view, + Add Labour full width on mobile */}
+        <div className="flex items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
+          {/* Desktop Only: Import */}
           <button
             type="button"
             onClick={() => alert("Importing labour records from Excel / CSV...")}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-[#faf7f4] text-[#23160e] text-xs font-bold rounded-xl border border-[#ede5dd] shadow-xs transition-colors cursor-pointer whitespace-nowrap active:scale-95"
+            className="hidden sm:flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-[#f8fafc] text-[#0f172a] text-xs font-bold rounded-xl border border-[#e2e8f0] shadow-xs transition-colors cursor-pointer whitespace-nowrap active:scale-95"
           >
-            <Download className="w-3.5 h-3.5 text-[#8a7566]" />
+            <Download className="w-3.5 h-3.5 text-[#64748b]" />
             <span>Import</span>
           </button>
 
+          {/* Desktop Only: Export */}
           <button
             type="button"
             onClick={() => alert("Exporting labour directory to Excel / PDF...")}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-[#faf7f4] text-[#23160e] text-xs font-bold rounded-xl border border-[#ede5dd] shadow-xs transition-colors cursor-pointer whitespace-nowrap active:scale-95"
+            className="hidden sm:flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-white hover:bg-[#f8fafc] text-[#0f172a] text-xs font-bold rounded-xl border border-[#e2e8f0] shadow-xs transition-colors cursor-pointer whitespace-nowrap active:scale-95"
           >
-            <Upload className="w-3.5 h-3.5 text-[#8a7566]" />
+            <Upload className="w-3.5 h-3.5 text-[#64748b]" />
             <span>Export</span>
           </button>
 
+          {/* Mobile + Desktop: + Add Labour */}
           <button
             type="button"
             onClick={handleCreateNew}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 sm:px-5 py-2.5 bg-[#5c341f] hover:bg-[#472716] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer whitespace-nowrap active:scale-95"
+            className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 sm:px-5 py-2.5 bg-[#0260de] hover:bg-[#0252bf] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer whitespace-nowrap active:scale-95"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
             <span>Add Labour</span>
@@ -403,148 +411,150 @@ export default function LabourManagementPage() {
       </div>
 
       {/* ========================================================= */}
-      {/* 2. TOP 4 KPI SUMMARY CARDS (Exact match to screenshot)    */}
+      {/* 2. TOP 4 KPI SUMMARY CARDS (Mobile optimized)             */}
       {/* ========================================================= */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 md:gap-5">
         {/* Card 1: Total Labour */}
-        <div className="bg-white rounded-3xl p-5 border border-[#ede5dd] shadow-xs relative overflow-hidden flex items-center justify-between">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-[#faf7f4] text-[#8a7566] flex items-center justify-center border border-[#ede5dd] shrink-0">
-              <Users className="w-6 h-6 stroke-[1.8]" />
+        <div className="bg-white rounded-2xl sm:rounded-3xl p-3 sm:p-5 border border-[#e2e8f0] shadow-xs relative overflow-hidden flex items-center justify-between">
+          <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
+            <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-[#f8fafc] text-[#64748b] flex items-center justify-center border border-[#e2e8f0] shrink-0">
+              <Users className="w-4 h-4 sm:w-6 sm:h-6 stroke-[1.8]" />
             </div>
-            <div>
-              <p className="text-xs font-bold text-[#8a7566]">Total Labour</p>
-              <h3 className="text-2xl sm:text-3xl font-black text-[#23160e] mt-0.5 tracking-tight">
+            <div className="min-w-0">
+              <p className="text-[11px] sm:text-xs font-bold text-[#64748b] truncate">Total Labour</p>
+              <h3 className="text-lg sm:text-2xl lg:text-3xl font-black text-[#0f172a] mt-0.5 tracking-tight">
                 {totalCount}
               </h3>
             </div>
           </div>
-          {/* Subtle decorative silhouettes */}
-          <div className="opacity-10 text-[#5c341f]">
-            <Users className="w-14 h-14" />
+          <div className="hidden sm:block opacity-10 text-[#0260de] shrink-0">
+            <Users className="w-12 h-12" />
           </div>
         </div>
 
-        {/* Card 2: Active Labour (Green sparkline) */}
-        <div className="bg-white rounded-3xl p-5 border border-[#ede5dd] shadow-xs relative overflow-hidden flex items-center justify-between">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-[#eaf8ea] text-[#1e822d] flex items-center justify-center border border-[#c4eec4] shrink-0">
-              <UserCheck className="w-6 h-6 stroke-[2]" />
+        {/* Card 2: Active Labour */}
+        <div className="bg-white rounded-2xl sm:rounded-3xl p-3 sm:p-5 border border-[#e2e8f0] shadow-xs relative overflow-hidden flex items-center justify-between">
+          <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
+            <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-[#eaf8ea] text-[#1e822d] flex items-center justify-center border border-[#c4eec4] shrink-0">
+              <UserCheck className="w-4 h-4 sm:w-6 sm:h-6 stroke-[2]" />
             </div>
-            <div>
-              <p className="text-xs font-bold text-[#8a7566]">Active Labour</p>
-              <h3 className="text-2xl sm:text-3xl font-black text-[#23160e] mt-0.5 tracking-tight">
+            <div className="min-w-0">
+              <p className="text-[11px] sm:text-xs font-bold text-[#64748b] truncate">Active</p>
+              <h3 className="text-lg sm:text-2xl lg:text-3xl font-black text-[#0f172a] mt-0.5 tracking-tight">
                 {activeCount}
               </h3>
             </div>
           </div>
-          {/* Gentle green sparkline curve */}
-          <svg className="w-20 h-10 text-[#1e822d]/60 stroke-current shrink-0" fill="none" viewBox="0 0 100 40">
+          <svg className="hidden sm:block w-20 h-10 text-[#1e822d]/60 stroke-current shrink-0" fill="none" viewBox="0 0 100 40">
             <path d="M0 32 Q 25 35, 50 20 T 100 8" strokeWidth="2.5" strokeLinecap="round" />
           </svg>
         </div>
 
-        {/* Card 3: On Leave (Amber sparkline) */}
-        <div className="bg-white rounded-3xl p-5 border border-[#ede5dd] shadow-xs relative overflow-hidden flex items-center justify-between">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-[#fff7ed] text-[#c2641e] flex items-center justify-center border border-[#fed7aa] shrink-0">
-              <Clock className="w-6 h-6 stroke-[2]" />
+        {/* Card 3: On Leave */}
+        <div className="bg-white rounded-2xl sm:rounded-3xl p-3 sm:p-5 border border-[#e2e8f0] shadow-xs relative overflow-hidden flex items-center justify-between">
+          <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
+            <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-[#fff7ed] text-[#c2641e] flex items-center justify-center border border-[#fed7aa] shrink-0">
+              <Clock className="w-4 h-4 sm:w-6 sm:h-6 stroke-[2]" />
             </div>
-            <div>
-              <p className="text-xs font-bold text-[#8a7566]">On Leave</p>
-              <h3 className="text-2xl sm:text-3xl font-black text-[#23160e] mt-0.5 tracking-tight">
+            <div className="min-w-0">
+              <p className="text-[11px] sm:text-xs font-bold text-[#64748b] truncate">On Leave</p>
+              <h3 className="text-lg sm:text-2xl lg:text-3xl font-black text-[#0f172a] mt-0.5 tracking-tight">
                 {leaveCount}
               </h3>
             </div>
           </div>
-          {/* Gentle amber sparkline curve */}
-          <svg className="w-20 h-10 text-[#c2641e]/60 stroke-current shrink-0" fill="none" viewBox="0 0 100 40">
+          <svg className="hidden sm:block w-20 h-10 text-[#c2641e]/60 stroke-current shrink-0" fill="none" viewBox="0 0 100 40">
             <path d="M0 35 Q 30 30, 60 15 T 100 22" strokeWidth="2.5" strokeLinecap="round" />
           </svg>
         </div>
 
-        {/* Card 4: Inactive (Red sparkline) */}
-        <div className="bg-white rounded-3xl p-5 border border-[#ede5dd] shadow-xs relative overflow-hidden flex items-center justify-between">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-[#fef1f0] text-[#cf382b] flex items-center justify-center border border-[#fecaca] shrink-0">
-              <Ban className="w-6 h-6 stroke-[2]" />
+        {/* Card 4: Inactive */}
+        <div className="bg-white rounded-2xl sm:rounded-3xl p-3 sm:p-5 border border-[#e2e8f0] shadow-xs relative overflow-hidden flex items-center justify-between">
+          <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
+            <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-[#fef1f0] text-[#cf382b] flex items-center justify-center border border-[#fecaca] shrink-0">
+              <Ban className="w-4 h-4 sm:w-6 sm:h-6 stroke-[2]" />
             </div>
-            <div>
-              <p className="text-xs font-bold text-[#8a7566]">Inactive</p>
-              <h3 className="text-2xl sm:text-3xl font-black text-[#23160e] mt-0.5 tracking-tight">
+            <div className="min-w-0">
+              <p className="text-[11px] sm:text-xs font-bold text-[#64748b] truncate">Inactive</p>
+              <h3 className="text-lg sm:text-2xl lg:text-3xl font-black text-[#0f172a] mt-0.5 tracking-tight">
                 {inactiveCount}
               </h3>
             </div>
           </div>
-          {/* Gentle red sparkline curve */}
-          <svg className="w-20 h-10 text-[#cf382b]/60 stroke-current shrink-0" fill="none" viewBox="0 0 100 40">
+          <svg className="hidden sm:block w-20 h-10 text-[#cf382b]/60 stroke-current shrink-0" fill="none" viewBox="0 0 100 40">
             <path d="M0 32 Q 35 32, 65 24 T 100 12" strokeWidth="2.5" strokeLinecap="round" />
           </svg>
         </div>
       </div>
 
       {/* ========================================================= */}
-      {/* 3. MAIN WORKSPACE (Split view: Left list, Right editor)   */}
+      {/* 3. MAIN WORKSPACE (Split on Desktop / Auto-routed Mobile) */}
       {/* ========================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-start">
         {/* --------------------------------------------------------- */}
-        {/* LEFT PANE: Labour Directory (5 Columns)                   */}
+        {/* LEFT PANE: Labour Directory                               */}
+        {/* Mobile: Shown by default; hidden when editing a profile   */}
+        {/* Desktop: Always visible (5 Columns)                       */}
         {/* --------------------------------------------------------- */}
-        <div className="lg:col-span-5 bg-white rounded-3xl p-5 sm:p-6 border border-[#ede5dd] shadow-xs flex flex-col space-y-4">
+        <div
+          className={`lg:col-span-5 bg-white rounded-3xl p-4 sm:p-6 border border-[#e2e8f0] shadow-xs flex-col space-y-4 ${
+            mobileView === "detail" ? "hidden lg:flex" : "flex"
+          }`}
+        >
           {/* Top Row: Title + Filter Pills */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4 text-[#8a7566]" />
-              <h2 className="text-base sm:text-lg font-black text-[#23160e] tracking-tight">
+              <FileText className="w-4 h-4 text-[#64748b]" />
+              <h2 className="text-base sm:text-lg font-black text-[#0f172a] tracking-tight">
                 Labour Directory
               </h2>
             </div>
 
             {/* Filter Pills: All, Active, Leave, Inactive */}
-            <div className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 sm:pb-0">
+            <div className="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 sm:pb-0 scrollbar-none">
               <button
                 type="button"
                 onClick={() => setActiveFilter("All")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                   activeFilter === "All"
-                    ? "bg-[#5c341f] text-white shadow-xs"
-                    : "bg-[#faf7f4] text-[#8a7566] hover:bg-[#ede5dd]/60"
+                    ? "bg-[#0260de] text-white shadow-xs"
+                    : "bg-[#f8fafc] text-[#64748b] hover:bg-[#e2e8f0]/60"
                 }`}
               >
-                All (24)
+                All ({totalCount})
               </button>
               <button
                 type="button"
                 onClick={() => setActiveFilter("Active")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                   activeFilter === "Active"
-                    ? "bg-[#5c341f] text-white shadow-xs"
-                    : "bg-[#faf7f4] text-[#8a7566] hover:bg-[#ede5dd]/60"
+                    ? "bg-[#0260de] text-white shadow-xs"
+                    : "bg-[#f8fafc] text-[#64748b] hover:bg-[#e2e8f0]/60"
                 }`}
               >
-                Active (20)
+                Active ({activeCount})
               </button>
               <button
                 type="button"
                 onClick={() => setActiveFilter("Leave")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                   activeFilter === "Leave"
-                    ? "bg-[#5c341f] text-white shadow-xs"
-                    : "bg-[#faf7f4] text-[#8a7566] hover:bg-[#ede5dd]/60"
+                    ? "bg-[#0260de] text-white shadow-xs"
+                    : "bg-[#f8fafc] text-[#64748b] hover:bg-[#e2e8f0]/60"
                 }`}
               >
-                Leave (2)
+                Leave ({leaveCount})
               </button>
               <button
                 type="button"
                 onClick={() => setActiveFilter("Inactive")}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                   activeFilter === "Inactive"
-                    ? "bg-[#5c341f] text-white shadow-xs"
-                    : "bg-[#faf7f4] text-[#8a7566] hover:bg-[#ede5dd]/60"
+                    ? "bg-[#0260de] text-white shadow-xs"
+                    : "bg-[#f8fafc] text-[#64748b] hover:bg-[#e2e8f0]/60"
                 }`}
               >
-                Inactive (2)
+                Inactive ({inactiveCount})
               </button>
             </div>
           </div>
@@ -552,25 +562,25 @@ export default function LabourManagementPage() {
           {/* Search Row with Filter and Sort Buttons */}
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
-              <Search className="w-4 h-4 text-[#8a7566] absolute left-3.5 top-3" />
+              <Search className="w-4 h-4 text-[#64748b] absolute left-3.5 top-3" />
               <input
                 type="text"
-                placeholder="Search labour by name, mobile or ID..."
+                placeholder="Search name, phone or ID..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl pl-10 pr-4 py-2.5 text-xs font-medium text-[#23160e] placeholder-[#8a7566] focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f] transition-all"
+                className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl pl-9 pr-3 py-2.5 text-xs font-medium text-[#0f172a] placeholder-[#64748b] focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de] transition-all"
               />
             </div>
             <button
               type="button"
-              className="w-10 h-10 rounded-xl bg-[#faf7f4] border border-[#ede5dd] hover:bg-[#ede5dd]/60 text-[#8a7566] flex items-center justify-center shrink-0 transition-colors"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#f8fafc] border border-[#e2e8f0] hover:bg-[#e2e8f0]/60 text-[#64748b] flex items-center justify-center shrink-0 transition-colors cursor-pointer"
               title="Filter Options"
             >
               <Filter className="w-4 h-4" />
             </button>
             <button
               type="button"
-              className="w-10 h-10 rounded-xl bg-[#faf7f4] border border-[#ede5dd] hover:bg-[#ede5dd]/60 text-[#8a7566] flex items-center justify-center shrink-0 transition-colors"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#f8fafc] border border-[#e2e8f0] hover:bg-[#e2e8f0]/60 text-[#64748b] flex items-center justify-center shrink-0 transition-colors cursor-pointer"
               title="Sort List"
             >
               <ArrowUpDown className="w-4 h-4" />
@@ -578,129 +588,161 @@ export default function LabourManagementPage() {
           </div>
 
           {/* Directory Cards List */}
-          <div className="space-y-2.5 max-h-[620px] overflow-y-auto pr-1">
-            {filteredLabours.map((labour) => {
-              const isSelected =
-                !isCreateMode &&
-                (labour._id === activeLabourId || labour.id === activeLabourId);
+          <div className="space-y-2.5 max-h-[500px] lg:max-h-[580px] overflow-y-auto pr-0.5">
+            {filteredLabours.length === 0 ? (
+              <div className="p-8 text-center bg-[#f8fafc] rounded-2xl border border-dashed border-[#e2e8f0]">
+                <Users className="w-8 h-8 text-[#64748b] mx-auto mb-2 opacity-40" />
+                <p className="text-xs font-bold text-[#64748b]">No labour found</p>
+                <p className="text-[11px] text-[#94a3b8] mt-1">Try adjusting search query or status filter.</p>
+              </div>
+            ) : (
+              filteredLabours.map((labour) => {
+                const isSelected =
+                  !isCreateMode &&
+                  (labour._id === activeLabourId || labour.id === activeLabourId);
 
-              // Soft status badges matching the screenshot
-              let badgeBg = "bg-[#eaf8ea] text-[#1e822d] border-[#c4eec4]";
-              if (labour.status === "On Leave") {
-                badgeBg = "bg-[#fff7ed] text-[#c2641e] border-[#fed7aa]";
-              } else if (labour.status === "Inactive") {
-                badgeBg = "bg-[#fef1f0] text-[#cf382b] border-[#fecaca]";
-              }
+                let badgeBg = "bg-[#eaf8ea] text-[#1e822d] border-[#c4eec4]";
+                if (labour.status === "On Leave") {
+                  badgeBg = "bg-[#fff7ed] text-[#c2641e] border-[#fed7aa]";
+                } else if (labour.status === "Inactive") {
+                  badgeBg = "bg-[#fef1f0] text-[#cf382b] border-[#fecaca]";
+                }
 
-              return (
-                <div
-                  key={labour._id || labour.id}
-                  onClick={() => selectLabour(labour)}
-                  className={`p-3 sm:p-3.5 rounded-2xl cursor-pointer transition-all flex items-center justify-between border ${
-                    isSelected
-                      ? "bg-[#5c341f] text-white border-[#5c341f] shadow-sm"
-                      : "bg-[#faf7f4] hover:bg-[#f4ece6] border-[#ede5dd] text-[#23160e]"
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    {/* Worker Avatar Photo */}
-                    <div
-                      className={`w-11 h-11 rounded-full overflow-hidden flex items-center justify-center shrink-0 border ${
-                        isSelected ? "border-white/40 ring-1 ring-white/30" : "border-[#ede5dd]"
-                      }`}
-                    >
-                      {labour.image ? (
-                        <img
-                          src={formatImageUrl(labour.image)}
-                          alt={labour.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div
-                          className={`w-full h-full flex items-center justify-center font-bold text-xs ${
-                            isSelected ? "bg-white/20 text-white" : "bg-[#5c341f]/10 text-[#5c341f]"
+                return (
+                  <div
+                    key={labour._id || labour.id}
+                    onClick={() => selectLabour(labour)}
+                    className={`p-3 sm:p-3.5 rounded-2xl cursor-pointer transition-all flex items-center justify-between border ${
+                      isSelected
+                        ? "bg-[#0260de] text-white border-[#0260de] shadow-sm"
+                        : "bg-[#f8fafc] hover:bg-[#eff6ff] border-[#e2e8f0] text-[#0f172a]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                      {/* Worker Avatar Photo */}
+                      <div
+                        className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden flex items-center justify-center shrink-0 border ${
+                          isSelected ? "border-white/40 ring-1 ring-white/30" : "border-[#e2e8f0]"
+                        }`}
+                      >
+                        {labour.image ? (
+                          <img
+                            src={formatImageUrl(labour.image)}
+                            alt={labour.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div
+                            className={`w-full h-full flex items-center justify-center font-bold text-xs ${
+                              isSelected ? "bg-white/20 text-white" : "bg-[#0260de]/10 text-[#0260de]"
+                            }`}
+                          >
+                            {labour.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Name + Labour ID */}
+                      <div className="min-w-0 flex-1">
+                        <h4
+                          className={`text-xs sm:text-sm font-bold truncate ${
+                            isSelected ? "text-white" : "text-[#0f172a]"
                           }`}
                         >
-                          {labour.name.charAt(0).toUpperCase()}
+                          {labour.name}
+                        </h4>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p
+                            className={`text-[10px] font-mono font-medium ${
+                              isSelected ? "text-blue-100" : "text-[#64748b]"
+                            }`}
+                          >
+                            {labour.labour_id || "LBR-0001"}
+                          </p>
+                          <span
+                            className={`sm:hidden text-[10px] truncate ${
+                              isSelected ? "text-blue-200" : "text-[#94a3b8]"
+                            }`}
+                          >
+                            • {labour.work_type || "Full Time"}
+                          </span>
                         </div>
-                      )}
+                      </div>
                     </div>
 
-                    {/* Name + Labour ID */}
-                    <div className="min-w-0">
-                      <h4
-                        className={`text-xs sm:text-sm font-bold truncate ${
-                          isSelected ? "text-white" : "text-[#23160e]"
+                    {/* Right side: Status Badge + Phone + Chevron */}
+                    <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-2">
+                      <span
+                        className={`text-[10px] font-bold px-2 sm:px-2.5 py-0.5 rounded-full border ${badgeBg}`}
+                      >
+                        {labour.status || "Active"}
+                      </span>
+
+                      <div
+                        className={`hidden md:flex items-center gap-1 text-[11px] font-medium ${
+                          isSelected ? "text-white/90" : "text-[#64748b]"
                         }`}
                       >
-                        {labour.name}
-                      </h4>
-                      <p
-                        className={`text-[10px] font-mono mt-0.5 ${
-                          isSelected ? "text-amber-100/90" : "text-[#8a7566]"
+                        <Phone className="w-3 h-3 opacity-70" />
+                        <span>{labour.mobile_number}</span>
+                      </div>
+
+                      <ChevronRight
+                        className={`w-4 h-4 transition-transform ${
+                          isSelected ? "text-white translate-x-0.5" : "text-[#64748b]"
                         }`}
-                      >
-                        {labour.labour_id || "LBR-0001"}
-                      </p>
+                      />
                     </div>
                   </div>
-
-                  {/* Right side: Status Badge + Phone + Chevron */}
-                  <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-                    <span
-                      className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${badgeBg}`}
-                    >
-                      {labour.status || "Active"}
-                    </span>
-
-                    <div
-                      className={`hidden sm:flex items-center gap-1 text-[11px] font-medium ${
-                        isSelected ? "text-white/90" : "text-[#8a7566]"
-                      }`}
-                    >
-                      <Phone className="w-3 h-3 opacity-70" />
-                      <span>{labour.mobile_number}</span>
-                    </div>
-
-                    <ChevronRight
-                      className={`w-4 h-4 transition-transform ${
-                        isSelected ? "text-white translate-x-0.5" : "text-[#8a7566]"
-                      }`}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
 
         {/* --------------------------------------------------------- */}
-        {/* RIGHT PANE: Edit Labour Profile Workspace (7 Columns)     */}
+        {/* RIGHT PANE: Edit Labour Profile Workspace                 */}
+        {/* Mobile: Hidden by default until a card or Add is tapped   */}
+        {/* Desktop: Always visible (7 Columns)                       */}
         {/* --------------------------------------------------------- */}
-        <div className="lg:col-span-7 bg-white rounded-3xl p-6 sm:p-7 border border-[#ede5dd] shadow-xs space-y-6">
+        <div
+          className={`lg:col-span-7 bg-white rounded-3xl p-4 sm:p-7 border border-[#e2e8f0] shadow-xs space-y-5 sm:space-y-6 ${
+            mobileView === "directory" ? "hidden lg:block" : "block"
+          }`}
+        >
+          {/* Mobile Back Button: Always allows quick return to directory */}
+          <div className="lg:hidden pb-1">
+            <button
+              type="button"
+              onClick={() => setMobileView("directory")}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0260de] hover:text-[#0252bf] p-1 -ml-1 transition-colors cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
+              <span>Back to Labour Directory</span>
+            </button>
+          </div>
+
           {/* Header & Action Buttons */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-5 border-b border-[#ede5dd]">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 sm:pb-5 border-b border-[#e2e8f0]">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-[#faf7f4] border border-[#ede5dd] flex items-center justify-center text-[#5c341f]">
+              <div className="w-8 h-8 rounded-xl bg-[#f8fafc] border border-[#e2e8f0] flex items-center justify-center text-[#0260de] shrink-0">
                 <Briefcase className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-base sm:text-lg font-black text-[#23160e]">
+                <h3 className="text-base sm:text-lg font-black text-[#0f172a]">
                   {isCreateMode ? "Add New Labour Profile" : "Edit Labour Profile"}
                 </h3>
-                <p className="text-xs text-[#8a7566] mt-0.5">
+                <p className="text-xs text-[#64748b] mt-0.5">
                   Update labour personal, salary and document information.
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 self-end sm:self-auto">
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end pt-1 sm:pt-0">
               <button
                 type="button"
-                onClick={() => {
-                  if (labours.length > 0) selectLabour(labours[0]);
-                }}
-                className="px-4 py-2 text-xs font-bold text-[#8a7566] hover:bg-[#faf7f4] border border-[#ede5dd] rounded-xl transition-colors cursor-pointer"
+                onClick={() => setMobileView("directory")}
+                className="flex-1 sm:flex-initial px-4 py-2 text-xs font-bold text-[#64748b] hover:bg-[#f8fafc] border border-[#e2e8f0] rounded-xl transition-colors cursor-pointer text-center"
               >
                 Cancel
               </button>
@@ -708,7 +750,7 @@ export default function LabourManagementPage() {
                 type="button"
                 onClick={handleSave}
                 disabled={isSaving}
-                className="flex items-center gap-1.5 px-5 py-2 bg-[#5c341f] hover:bg-[#472716] text-white text-xs font-bold rounded-xl shadow-xs transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-5 py-2 bg-[#0260de] hover:bg-[#0252bf] text-white text-xs font-bold rounded-xl shadow-xs transition-all active:scale-95 disabled:opacity-60 cursor-pointer whitespace-nowrap"
               >
                 <Check className="w-4 h-4 stroke-[2.5]" />
                 <span>{isSaving ? "Saving..." : "Save Changes"}</span>
@@ -717,12 +759,12 @@ export default function LabourManagementPage() {
           </div>
 
           {/* Form Content */}
-          <div className="space-y-6">
+          <div className="space-y-5 sm:space-y-6">
             {/* 1. Avatar Photo + Full Name + Mobile Number + Labour ID */}
-            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-6">
               {/* Profile Photo with Camera badge */}
               <div className="relative shrink-0">
-                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-2 border-white shadow-md bg-[#faf7f4] flex items-center justify-center">
+                <div className="w-20 h-20 sm:w-28 sm:h-28 rounded-full overflow-hidden border-2 border-white shadow-md bg-[#f8fafc] flex items-center justify-center">
                   {formData.image ? (
                     <img
                       src={formatImageUrl(formData.image)}
@@ -730,12 +772,12 @@ export default function LabourManagementPage() {
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <Users className="w-10 h-10 text-[#8a7566] opacity-60" />
+                    <Users className="w-8 h-8 sm:w-10 sm:h-10 text-[#64748b] opacity-60" />
                   )}
                 </div>
 
                 {/* Camera upload button */}
-                <label className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-[#5c341f] hover:bg-[#472716] text-white flex items-center justify-center border-2 border-white shadow-sm cursor-pointer transition-transform hover:scale-110 active:scale-95">
+                <label className="absolute bottom-0 right-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#0260de] hover:bg-[#0252bf] text-white flex items-center justify-center border-2 border-white shadow-sm cursor-pointer transition-transform hover:scale-110 active:scale-95">
                   <Camera className="w-3.5 h-3.5" />
                   <input
                     type="file"
@@ -747,10 +789,10 @@ export default function LabourManagementPage() {
               </div>
 
               {/* Name & Phone & ID Inputs */}
-              <div className="flex-1 w-full space-y-4">
+              <div className="flex-1 w-full space-y-3.5 sm:space-y-4">
                 {/* Full Name */}
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b] mb-1.5">
                     Full Name <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -759,7 +801,7 @@ export default function LabourManagementPage() {
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="e.g. Rameshwar Patel"
-                    className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-4 py-2.5 text-xs sm:text-sm font-bold text-[#23160e] placeholder-[#8a7566] focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f] transition-all"
+                    className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-[#0f172a] placeholder-[#64748b] focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de] transition-all"
                   />
                 </div>
 
@@ -767,37 +809,37 @@ export default function LabourManagementPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
                   {/* Mobile Number */}
                   <div className="sm:col-span-8">
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b] mb-1.5">
                       Mobile Number <span className="text-red-500">*</span>
                     </label>
-                    <div className="flex items-center gap-1.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3 py-1.5 focus-within:ring-2 focus-within:ring-[#5c341f]/20 focus-within:border-[#5c341f]">
+                    <div className="flex items-center gap-1.5 bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3 py-1.5 focus-within:ring-2 focus-within:ring-[#0260de]/20 focus-within:border-[#0260de]">
                       <select
                         value={formData.country_code}
                         onChange={(e) => setFormData({ ...formData, country_code: e.target.value })}
-                        className="bg-transparent text-xs font-bold text-[#23160e] focus:outline-none cursor-pointer pr-1"
+                        className="bg-transparent text-xs font-bold text-[#0f172a] focus:outline-none cursor-pointer pr-1"
                       >
                         <option value="+91">+91</option>
                         <option value="+1">+1</option>
                         <option value="+44">+44</option>
                       </select>
-                      <span className="text-[#ede5dd]">|</span>
+                      <span className="text-[#e2e8f0]">|</span>
                       <input
                         type="tel"
                         required
                         value={formData.mobile_number}
                         onChange={(e) => setFormData({ ...formData, mobile_number: e.target.value })}
                         placeholder="98241 12345"
-                        className="w-full bg-transparent text-xs sm:text-sm font-bold text-[#23160e] focus:outline-none"
+                        className="w-full bg-transparent text-xs sm:text-sm font-bold text-[#0f172a] focus:outline-none min-w-0"
                       />
                     </div>
                   </div>
 
                   {/* Labour ID */}
                   <div className="sm:col-span-4">
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b] mb-1.5">
                       Labour ID
                     </label>
-                    <div className="bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-[#23160e] text-center">
+                    <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3 py-2 text-xs font-mono font-bold text-[#0f172a] text-center">
                       {formData.labour_id}
                     </div>
                   </div>
@@ -806,31 +848,31 @@ export default function LabourManagementPage() {
             </div>
 
             {/* 2. Address & Salary Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 sm:gap-4">
               {/* Address */}
               <div className="sm:col-span-7">
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b] mb-1.5">
                   Address
                 </label>
-                <div className="flex items-center gap-2 bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3.5 py-2.5 focus-within:ring-2 focus-within:ring-[#5c341f]/20 focus-within:border-[#5c341f]">
-                  <MapPin className="w-4 h-4 text-[#8a7566] shrink-0" />
+                <div className="flex items-center gap-2 bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2 sm:py-2.5 focus-within:ring-2 focus-within:ring-[#0260de]/20 focus-within:border-[#0260de]">
+                  <MapPin className="w-4 h-4 text-[#64748b] shrink-0" />
                   <input
                     type="text"
                     value={formData.address}
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                     placeholder="Bapunagar, Ahmedabad, Gujarat"
-                    className="w-full bg-transparent text-xs font-medium text-[#23160e] focus:outline-none placeholder-[#8a7566]"
+                    className="w-full bg-transparent text-xs font-medium text-[#0f172a] focus:outline-none placeholder-[#64748b] min-w-0"
                   />
                 </div>
               </div>
 
               {/* Salary (INR) */}
               <div className="sm:col-span-5">
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b] mb-1.5">
                   Salary (INR) <span className="text-red-500">*</span>
                 </label>
-                <div className="flex items-center gap-2 bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3.5 py-2.5 focus-within:ring-2 focus-within:ring-[#5c341f]/20 focus-within:border-[#5c341f]">
-                  <span className="text-sm font-bold text-[#8a7566]">₹</span>
+                <div className="flex items-center gap-2 bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2 sm:py-2.5 focus-within:ring-2 focus-within:ring-[#0260de]/20 focus-within:border-[#0260de]">
+                  <span className="text-sm font-bold text-[#64748b]">₹</span>
                   <input
                     type="number"
                     value={formData.salary || ""}
@@ -838,7 +880,7 @@ export default function LabourManagementPage() {
                       setFormData({ ...formData, salary: parseFloat(e.target.value) || 0 })
                     }
                     placeholder="24,000"
-                    className="w-full bg-transparent text-xs sm:text-sm font-black text-[#23160e] focus:outline-none"
+                    className="w-full bg-transparent text-xs sm:text-sm font-black text-[#0f172a] focus:outline-none min-w-0"
                   />
                 </div>
               </div>
@@ -846,37 +888,37 @@ export default function LabourManagementPage() {
 
             {/* 3. Section: Employment Details */}
             <div className="space-y-3 pt-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-[#23160e]">
-                <Briefcase className="w-4 h-4 text-[#5c341f]" />
+              <div className="flex items-center gap-2 text-xs font-bold text-[#0f172a]">
+                <Briefcase className="w-4 h-4 text-[#0260de]" />
                 <span className="text-sm font-black">Employment Details</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-3.5">
                 {/* Joining Date */}
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-[#64748b] mb-1.5">
                     Joining Date
                   </label>
-                  <div className="flex items-center gap-2 bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3 py-2">
-                    <Calendar className="w-3.5 h-3.5 text-[#8a7566] shrink-0" />
+                  <div className="flex items-center gap-2 bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3 py-2">
+                    <Calendar className="w-3.5 h-3.5 text-[#64748b] shrink-0" />
                     <input
                       type="date"
                       value={formData.joining_date}
                       onChange={(e) => setFormData({ ...formData, joining_date: e.target.value })}
-                      className="w-full bg-transparent text-xs font-bold text-[#23160e] focus:outline-none cursor-pointer"
+                      className="w-full bg-transparent text-xs font-bold text-[#0f172a] focus:outline-none cursor-pointer min-w-0"
                     />
                   </div>
                 </div>
 
                 {/* Work Type */}
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-[#64748b] mb-1.5">
                     Work Type
                   </label>
                   <select
                     value={formData.work_type}
                     onChange={(e) => setFormData({ ...formData, work_type: e.target.value as any })}
-                    className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3 py-2 text-xs font-bold text-[#23160e] focus:outline-none cursor-pointer"
+                    className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3 py-2 text-xs font-bold text-[#0f172a] focus:outline-none cursor-pointer"
                   >
                     <option value="Full Time">Full Time</option>
                     <option value="Part Time">Part Time</option>
@@ -887,7 +929,7 @@ export default function LabourManagementPage() {
 
                 {/* Status */}
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-[#64748b] mb-1.5">
                     Status
                   </label>
                   <div className="relative">
@@ -899,7 +941,7 @@ export default function LabourManagementPage() {
                           status: e.target.value,
                         })
                       }
-                      className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl pl-6 pr-3 py-2 text-xs font-bold text-[#23160e] focus:outline-none cursor-pointer"
+                      className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl pl-6 pr-3 py-2 text-xs font-bold text-[#0f172a] focus:outline-none cursor-pointer"
                     >
                       <option value="Active">Active</option>
                       <option value="On Leave">On Leave</option>
@@ -922,23 +964,23 @@ export default function LabourManagementPage() {
 
             {/* 4. Section: Aadhar Card Document */}
             <div className="space-y-3 pt-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-[#23160e]">
-                <IdCard className="w-4 h-4 text-[#5c341f]" />
+              <div className="flex items-center gap-2 text-xs font-bold text-[#0f172a]">
+                <IdCard className="w-4 h-4 text-[#0260de]" />
                 <span className="text-sm font-black">Aadhar Card Document</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 sm:gap-4">
                 {/* Upload Box */}
-                <div className="sm:col-span-6 border-2 border-dashed border-[#ede5dd] hover:border-[#5c341f] rounded-2xl p-5 flex flex-col items-center justify-center text-center bg-[#faf7f4] transition-colors">
-                  <div className="w-10 h-10 rounded-xl bg-white border border-[#ede5dd] flex items-center justify-center text-[#5c341f] mb-2 shadow-xs">
-                    <FileText className="w-5 h-5" />
+                <div className="sm:col-span-6 border-2 border-dashed border-[#e2e8f0] hover:border-[#0260de] rounded-2xl p-4 sm:p-5 flex flex-col items-center justify-center text-center bg-[#f8fafc] transition-colors">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white border border-[#e2e8f0] flex items-center justify-center text-[#0260de] mb-2 shadow-xs">
+                    <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
                   </div>
-                  <h4 className="text-xs font-bold text-[#23160e]">Upload Aadhar Card</h4>
-                  <p className="text-[10px] text-[#8a7566] mt-0.5 mb-3">
+                  <h4 className="text-xs font-bold text-[#0f172a]">Upload Aadhar Card</h4>
+                  <p className="text-[10px] text-[#64748b] mt-0.5 mb-3">
                     PDF, JPG or PNG (Max 5 MB)
                   </p>
-                  <label className="flex items-center gap-1.5 px-4 py-1.5 bg-white hover:bg-[#ede5dd]/40 border border-[#ede5dd] text-[#23160e] text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-colors">
-                    <Upload className="w-3.5 h-3.5 text-[#8a7566]" />
+                  <label className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white hover:bg-[#e2e8f0]/40 border border-[#e2e8f0] text-[#0f172a] text-xs font-bold rounded-xl shadow-xs cursor-pointer transition-colors active:scale-95">
+                    <Upload className="w-3.5 h-3.5 text-[#64748b]" />
                     <span>Choose File</span>
                     <input
                       type="file"
@@ -950,35 +992,37 @@ export default function LabourManagementPage() {
                 </div>
 
                 {/* Document Preview Card */}
-                <div className="sm:col-span-6 bg-[#faf7f4] border border-[#ede5dd] rounded-2xl p-3.5 relative flex items-center justify-center min-h-[140px]">
+                <div className="sm:col-span-6 bg-[#f8fafc] border border-[#e2e8f0] rounded-2xl p-3.5 relative flex items-center justify-center min-h-[130px]">
                   {/* Delete Trash Button */}
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, aadhar_image: "" })}
-                    className="absolute top-2.5 right-2.5 w-7 h-7 rounded-lg bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center shadow-xs transition-colors cursor-pointer"
-                    title="Remove Document"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {formData.aadhar_image && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, aadhar_image: "" })}
+                      className="absolute top-2.5 right-2.5 w-7 h-7 rounded-lg bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center shadow-xs transition-colors cursor-pointer"
+                      title="Remove Document"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
 
                   {formData.aadhar_image ? (
                     <div className="w-full h-full flex flex-col items-center justify-center">
-                      <div className="w-full max-w-[220px] bg-white rounded-xl p-2.5 border border-[#ede5dd] shadow-sm flex items-center gap-3">
-                        <div className="w-12 h-14 rounded bg-gray-100 border border-gray-200 overflow-hidden shrink-0 flex items-center justify-center">
+                      <div className="w-full max-w-[210px] bg-white rounded-xl p-2.5 border border-[#e2e8f0] shadow-sm flex items-center gap-2.5">
+                        <div className="w-11 h-13 rounded bg-gray-100 border border-gray-200 overflow-hidden shrink-0 flex items-center justify-center">
                           <img
                             src={formatImageUrl(formData.aadhar_image)}
                             alt="Aadhar Card Sample"
                             className="w-full h-full object-cover"
                           />
                         </div>
-                        <div className="space-y-1 flex-1">
+                        <div className="space-y-1 flex-1 min-w-0">
                           <div className="flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-orange-500"></span>
-                            <span className="text-[9px] font-black text-gray-800">
-                              GOVERNMENT OF INDIA
+                            <span className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0"></span>
+                            <span className="text-[9px] font-black text-gray-800 truncate">
+                              GOVT OF INDIA
                             </span>
                           </div>
-                          <div className="h-1.5 bg-gray-200 rounded w-16"></div>
+                          <div className="h-1 bg-gray-200 rounded w-14"></div>
                           <p className="text-[9px] font-mono font-bold text-gray-700">
                             XXXX XXXX 1234
                           </p>
@@ -989,10 +1033,10 @@ export default function LabourManagementPage() {
                       </p>
                     </div>
                   ) : (
-                    <div className="text-center p-4">
-                      <IdCard className="w-8 h-8 text-[#8a7566] mx-auto mb-1 opacity-50" />
-                      <p className="text-xs font-bold text-[#8a7566]">No Document Uploaded</p>
-                      <p className="text-[10px] text-[#8a7566] mt-0.5">
+                    <div className="text-center p-3">
+                      <IdCard className="w-7 h-7 text-[#64748b] mx-auto mb-1 opacity-50" />
+                      <p className="text-xs font-bold text-[#64748b]">No Document Uploaded</p>
+                      <p className="text-[10px] text-[#64748b] mt-0.5">
                         Upload worker identity for KYC compliance
                       </p>
                     </div>

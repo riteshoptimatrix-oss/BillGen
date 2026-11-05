@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fdfdfc; /* Off-white background */
-  --foreground: #1c1c1c;
+  --background: #f4f7fc; /* Cool modern slate-tinted background matching reference */
+  --foreground: #0f172a;
   --card: #ffffff;
-  --card-foreground: #1c1c1c;
-  --border: #e6e6e6;
-  --primary: #2563eb;
+  --card-foreground: #0f172a;
+  --border: #e2e8f0;
+  --primary: #0260de; /* Cobalt Blue matching reference image */
   --primary-foreground: #ffffff;
-  --sidebar-bg: #f8f8f6;
-  --sidebar-border: #e6e6e6;
+  --sidebar-bg: #0b192c;
+  --sidebar-border: #1e293b;
 }
 
 @theme inline {
@@ -32,8 +32,8 @@ body {
 
 /* Glassmorphism utilities */
 .glass {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
 }

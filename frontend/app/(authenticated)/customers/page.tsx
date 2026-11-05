@@ -7,7 +7,7 @@ import {
   Search,
   Plus,
   Trash2,
-  Save,
+  Check,
   X,
   Phone,
   Mail,
@@ -16,6 +16,7 @@ import {
   Landmark,
   ShieldCheck,
   ChevronRight,
+  ChevronLeft,
   ChevronDown,
   ChevronUp,
   FileText,
@@ -46,6 +47,9 @@ export default function CustomersPage() {
   const [activeCustomerId, setActiveCustomerId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // In mobile view, ALWAYS default to "directory" so the user sees the list first
+  const [mobileView, setMobileView] = useState<"directory" | "detail">("directory");
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFilter, setSelectedFilter] = useState<"all" | "gst">("all");
   const [hasChanges, setHasChanges] = useState(false);
@@ -75,7 +79,6 @@ export default function CustomersPage() {
         const data = await res.json();
         setCustomers(data);
         if (data.length > 0 && activeView === "empty") {
-          // Select the first customer automatically on desktop
           setActiveView("edit");
           setActiveCustomerId(data[0]._id);
           populateForm(data[0]);
@@ -128,12 +131,14 @@ export default function CustomersPage() {
       account_type: "Current Account",
     });
     setHasChanges(true);
+    setMobileView("detail");
   };
 
   const handleCustomerClick = (customer: Customer) => {
     setActiveView("edit");
     setActiveCustomerId(customer._id);
     populateForm(customer);
+    setMobileView("detail");
   };
 
   const handleDeleteCustomer = async () => {
@@ -150,56 +155,65 @@ export default function CustomersPage() {
           if (updated.length > 0) {
             setActiveCustomerId(updated[0]._id);
             populateForm(updated[0]);
-            setActiveView("edit");
           } else {
             setActiveView("empty");
             setActiveCustomerId(null);
           }
-        } else {
-          alert("Failed to delete customer.");
+          setMobileView("directory");
         }
-      } catch (err) {
-        console.error("Delete customer error:", err);
+      } catch (error) {
+        console.error("Failed to delete customer:", error);
       }
     }
   };
 
   const handleSave = async () => {
     if (!formData.name.trim() || !formData.mobile_number.trim()) {
-      alert("Customer Name and Mobile Number are required!");
+      alert("Name and Mobile Number are required.");
       return;
     }
 
     setIsSaving(true);
     try {
       const apiUrl = getApiUrl();
-      const endpoint =
-        activeView === "create"
-          ? `${apiUrl}/customers/`
-          : `${apiUrl}/customers/${activeCustomerId}`;
-      const method = activeView === "create" ? "POST" : "PUT";
-
-      const res = await fetch(endpoint, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      });
-
-      if (res.ok) {
-        const savedCustomer = await res.json();
-        setHasChanges(false);
-        await fetchCustomers();
-        setActiveView("edit");
-        setActiveCustomerId(savedCustomer._id || savedCustomer.id || activeCustomerId);
-      } else {
-        const err = await res.json();
-        alert(err.detail || "Failed to save customer");
+      if (activeView === "create") {
+        const res = await fetch(`${apiUrl}/customers/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+        if (res.ok) {
+          const newCust = await res.json();
+          setCustomers([newCust, ...customers]);
+          setActiveCustomerId(newCust._id);
+          setActiveView("edit");
+          populateForm(newCust);
+        } else {
+          alert("Failed to create customer.");
+        }
+      } else if (activeView === "edit" && activeCustomerId) {
+        const res = await fetch(`${apiUrl}/customers/${activeCustomerId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          setCustomers(
+            customers.map((c) => (c._id === activeCustomerId ? updated : c))
+          );
+          populateForm(updated);
+        } else {
+          alert("Failed to update customer.");
+        }
       }
     } catch (error) {
-      console.error("Save error:", error);
+      console.error("Error saving customer:", error);
       alert("An error occurred while saving.");
     } finally {
       setIsSaving(false);
+      // Automatically redirect back to the Customers Directory on mobile!
+      setMobileView("directory");
     }
   };
 
@@ -217,25 +231,25 @@ export default function CustomersPage() {
   const activeCustomer = customers.find((c) => c._id === activeCustomerId);
 
   return (
-    <div className="space-y-6 pb-12 font-sans">
+    <div className="space-y-5 sm:space-y-6 pb-12 font-sans w-full max-w-full overflow-x-hidden">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3.5 sm:gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-[#5c341f] text-white flex items-center justify-center shadow-xs">
-              <Users className="w-4 h-4" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#0260de] text-white flex items-center justify-center shadow-xs shrink-0">
+              <Users className="w-5 h-5" />
             </div>
-            <h1 className="text-2xl font-black text-[#23160e] tracking-tight">Customers</h1>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-[#0f172a] tracking-tight">Customers</h1>
           </div>
-          <p className="text-xs text-[#8a7566] mt-1">
+          <p className="text-xs sm:text-sm text-[#64748b] font-medium mt-1 line-clamp-1 sm:line-clamp-none">
             Manage your verified dealer network, GSTIN registrations, and delivery destinations.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="w-full sm:w-auto">
           <button
             onClick={handleCreateNewClick}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#5c341f] hover:bg-[#472716] text-white text-xs font-semibold rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-[#0260de] hover:bg-[#0252bf] text-white text-xs font-bold rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer whitespace-nowrap"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
             <span>Add Customer</span>
@@ -244,27 +258,31 @@ export default function CustomersPage() {
       </div>
 
       {/* Main Split-Pane Workspace */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Master List (4 Cols) */}
-        <div className="lg:col-span-5 bg-white rounded-3xl p-5 border border-[#ede5dd] shadow-xs flex flex-col">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-start">
+        {/* Left Master List: Hidden on mobile when viewing detail; always visible on desktop (5 Cols) */}
+        <div
+          className={`lg:col-span-5 bg-white rounded-3xl p-4 sm:p-5 border border-[#e2e8f0] shadow-xs flex-col ${
+            mobileView === "detail" ? "hidden lg:flex" : "flex"
+          }`}
+        >
           {/* Filter Pills */}
-          <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
+          <div className="flex items-center gap-2 mb-3.5 overflow-x-auto pb-1 scrollbar-none">
             <button
               onClick={() => setSelectedFilter("all")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                 selectedFilter === "all"
-                  ? "bg-[#5c341f] text-white shadow-xs"
-                  : "bg-[#faf7f4] text-[#8a7566] hover:bg-[#ede5dd]/60"
+                  ? "bg-[#0260de] text-white shadow-xs"
+                  : "bg-[#f8fafc] text-[#64748b] hover:bg-[#e2e8f0]/60"
               }`}
             >
               All Clients ({customers.length})
             </button>
             <button
               onClick={() => setSelectedFilter("gst")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                 selectedFilter === "gst"
-                  ? "bg-[#5c341f] text-white shadow-xs"
-                  : "bg-[#faf7f4] text-[#8a7566] hover:bg-[#ede5dd]/60"
+                  ? "bg-[#0260de] text-white shadow-xs"
+                  : "bg-[#f8fafc] text-[#64748b] hover:bg-[#e2e8f0]/60"
               }`}
             >
               Registered GSTIN ({customers.filter((c) => !!c.gst_number).length})
@@ -272,26 +290,26 @@ export default function CustomersPage() {
           </div>
 
           {/* Search Box */}
-          <div className="relative mb-4">
-            <Search className="w-4 h-4 text-[#8a7566] absolute left-3.5 top-3" />
+          <div className="relative mb-3.5">
+            <Search className="w-4 h-4 text-[#64748b] absolute left-3.5 top-3" />
             <input
               type="text"
               placeholder="Search customers, mobile, GST..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl pl-10 pr-4 py-2.5 text-xs font-medium text-[#23160e] placeholder-[#8a7566] focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f] transition-all"
+              className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl pl-9 pr-3.5 py-2.5 text-xs font-medium text-[#0f172a] placeholder-[#64748b] focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de] transition-all"
             />
           </div>
 
           {/* Customer Cards List */}
-          <div className="space-y-2 max-h-[620px] overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-[500px] lg:max-h-[580px] overflow-y-auto pr-0.5">
             {isLoading ? (
-              <div className="py-12 text-center text-[#8a7566] text-xs">
-                <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-[#5c341f] mb-2"></div>
+              <div className="py-12 text-center text-[#64748b] text-xs">
+                <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-[#0260de] mb-2"></div>
                 <p>Loading customers...</p>
               </div>
             ) : filteredCustomers.length === 0 ? (
-              <div className="py-12 text-center text-[#8a7566] text-xs font-medium">
+              <div className="py-12 text-center text-[#64748b] text-xs font-medium">
                 No customer records found.
               </div>
             ) : (
@@ -308,26 +326,26 @@ export default function CustomersPage() {
                   <div
                     key={customer._id}
                     onClick={() => handleCustomerClick(customer)}
-                    className={`p-3.5 rounded-2xl cursor-pointer transition-all flex items-center justify-between border ${
+                    className={`p-3 sm:p-3.5 rounded-2xl cursor-pointer transition-all flex items-center justify-between border ${
                       isSelected
-                        ? "bg-[#5c341f] text-white border-[#5c341f] shadow-xs"
-                        : "bg-[#faf7f4] hover:bg-[#f4ede6] border-[#ede5dd] text-[#23160e]"
+                        ? "bg-[#0260de] text-white border-[#0260de] shadow-xs"
+                        : "bg-[#f8fafc] hover:bg-[#eff6ff] border-[#e2e8f0] text-[#0f172a]"
                     }`}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                       <div
-                        className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                        className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
                           isSelected
                             ? "bg-white/20 text-white"
-                            : "bg-[#5c341f]/10 text-[#5c341f]"
+                            : "bg-[#0260de]/10 text-[#0260de]"
                         }`}
                       >
                         {initials || "SV"}
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <h4
-                          className={`text-xs font-bold truncate ${
-                            isSelected ? "text-white" : "text-[#23160e]"
+                          className={`text-xs sm:text-sm font-bold truncate ${
+                            isSelected ? "text-white" : "text-[#0f172a]"
                           }`}
                         >
                           {customer.name}
@@ -335,7 +353,7 @@ export default function CustomersPage() {
                         <div className="flex items-center gap-2 mt-0.5">
                           <span
                             className={`text-[11px] font-medium truncate ${
-                              isSelected ? "text-white/80" : "text-[#8a7566]"
+                              isSelected ? "text-blue-100" : "text-[#64748b]"
                             }`}
                           >
                             {customer.mobile_number}
@@ -345,7 +363,7 @@ export default function CustomersPage() {
                               className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
                                 isSelected
                                   ? "bg-white/20 text-white"
-                                  : "bg-[#5c341f]/10 text-[#5c341f]"
+                                  : "bg-[#0260de]/10 text-[#0260de]"
                               }`}
                             >
                               GSTIN
@@ -357,7 +375,7 @@ export default function CustomersPage() {
 
                     <ChevronRight
                       className={`w-4 h-4 shrink-0 transition-transform ${
-                        isSelected ? "text-white translate-x-0.5" : "text-[#8a7566]"
+                        isSelected ? "text-white translate-x-0.5" : "text-[#64748b]"
                       }`}
                     />
                   </div>
@@ -367,45 +385,61 @@ export default function CustomersPage() {
           </div>
         </div>
 
-        {/* Right Detail / Edit Workspace (7 Cols) */}
-        <div className="lg:col-span-7 bg-white rounded-3xl p-6 border border-[#ede5dd] shadow-xs">
+        {/* Right Detail / Edit Workspace: Hidden on mobile by default; shown when a card or Add is tapped */}
+        <div
+          className={`lg:col-span-7 bg-white rounded-3xl p-4 sm:p-6 border border-[#e2e8f0] shadow-xs ${
+            mobileView === "directory" ? "hidden lg:block" : "block"
+          }`}
+        >
+          {/* Mobile Back Button */}
+          <div className="lg:hidden pb-1">
+            <button
+              type="button"
+              onClick={() => setMobileView("directory")}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0260de] hover:text-[#0252bf] p-1 -ml-1 transition-colors cursor-pointer mb-2"
+            >
+              <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
+              <span>Back to Customers Directory</span>
+            </button>
+          </div>
+
           {activeView === "empty" ? (
-            <div className="py-24 text-center text-[#8a7566]">
-              <div className="w-16 h-16 rounded-2xl bg-[#faf7f4] border border-[#ede5dd] flex items-center justify-center mx-auto mb-3 text-[#5c341f]">
+            <div className="py-20 text-center text-[#64748b]">
+              <div className="w-16 h-16 rounded-2xl bg-[#f8fafc] border border-[#e2e8f0] flex items-center justify-center mx-auto mb-3 text-[#0260de]">
                 <Users className="w-7 h-7" />
               </div>
-              <h3 className="text-sm font-bold text-[#23160e]">No Customer Selected</h3>
-              <p className="text-xs text-[#8a7566] mt-1 max-w-sm mx-auto">
+              <h3 className="text-sm font-bold text-[#0f172a]">No Customer Selected</h3>
+              <p className="text-xs text-[#64748b] mt-1 max-w-sm mx-auto">
                 Select a client from the directory on the left or add a new customer profile.
               </p>
               <button
                 onClick={handleCreateNewClick}
-                className="mt-4 px-4 py-2 bg-[#5c341f] text-white text-xs font-semibold rounded-xl shadow-xs hover:bg-[#472716]"
+                className="mt-4 px-4 py-2 bg-[#0260de] text-white text-xs font-bold rounded-xl shadow-xs hover:bg-[#0252bf] cursor-pointer"
               >
                 + Create New Customer
               </button>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-5 sm:space-y-6">
               {/* Workspace Header */}
-              <div className="flex items-center justify-between pb-4 border-b border-[#ede5dd]">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-4 border-b border-[#e2e8f0] gap-3">
                 <div>
-                  <h3 className="text-base font-black text-[#23160e]">
+                  <h3 className="text-base sm:text-lg font-black text-[#0f172a]">
                     {activeView === "create" ? "Add New Customer" : "Customer Profile"}
                   </h3>
-                  <p className="text-xs text-[#8a7566] mt-0.5">
+                  <p className="text-xs text-[#64748b] mt-0.5">
                     {activeView === "create"
                       ? "Enter client identity, contact information, and GST details."
                       : "Review and update client parameters, billing address, and bank accounts."}
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end pt-1 sm:pt-0">
                   {activeView === "edit" && activeCustomerId && (
                     <button
                       type="button"
                       onClick={handleDeleteCustomer}
-                      className="p-2 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl transition-colors cursor-pointer"
+                      className="p-2 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl transition-colors cursor-pointer shrink-0"
                       title="Delete Customer"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -424,28 +458,29 @@ export default function CustomersPage() {
                       } else {
                         if (activeCustomer) populateForm(activeCustomer);
                       }
+                      setMobileView("directory");
                     }}
-                    className="px-3.5 py-2 text-xs font-semibold text-[#8a7566] hover:bg-[#faf7f4] border border-[#ede5dd] rounded-xl transition-colors cursor-pointer"
+                    className="flex-1 sm:flex-initial px-3.5 py-2 text-xs font-bold text-[#64748b] hover:bg-[#f8fafc] border border-[#e2e8f0] rounded-xl transition-colors cursor-pointer text-center"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleSave}
                     disabled={isSaving}
-                    className="flex items-center gap-1.5 px-5 py-2 bg-[#5c341f] hover:bg-[#472716] text-white text-xs font-semibold rounded-xl shadow-xs transition-all active:scale-95 disabled:opacity-70 cursor-pointer"
+                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-5 py-2 bg-[#0260de] hover:bg-[#0252bf] text-white text-xs font-bold rounded-xl shadow-xs transition-all active:scale-95 disabled:opacity-70 cursor-pointer whitespace-nowrap"
                   >
-                    <Save className="w-3.5 h-3.5" />
+                    <Check className="w-4 h-4 stroke-[2.5]" />
                     <span>{isSaving ? "Saving..." : "Save Changes"}</span>
                   </button>
                 </div>
               </div>
 
               {/* Form Body */}
-              <div className="space-y-5">
+              <div className="space-y-4 sm:space-y-5">
                 {/* Primary Identifiers */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
                   <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b] mb-1.5">
                       Client / Company Name *
                     </label>
                     <input
@@ -456,12 +491,12 @@ export default function CustomersPage() {
                         setHasChanges(true);
                       }}
                       placeholder="e.g. Gujarat Auto Spares & Body Works"
-                      className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#23160e] placeholder-[#8a7566] focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f] transition-all"
+                      className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2 sm:py-2.5 text-xs font-bold text-[#0f172a] placeholder-[#64748b] focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de] transition-all"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b] mb-1.5">
                       Mobile Number *
                     </label>
                     <input
@@ -472,12 +507,12 @@ export default function CustomersPage() {
                         setHasChanges(true);
                       }}
                       placeholder="+91 98250 14829"
-                      className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#23160e] placeholder-[#8a7566] focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f] transition-all"
+                      className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2 sm:py-2.5 text-xs font-bold text-[#0f172a] placeholder-[#64748b] focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de] transition-all"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b] mb-1.5">
                       Email Address
                     </label>
                     <input
@@ -488,12 +523,12 @@ export default function CustomersPage() {
                         setHasChanges(true);
                       }}
                       placeholder="client@automotive.com"
-                      className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3.5 py-2.5 text-xs font-medium text-[#23160e] placeholder-[#8a7566] focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f] transition-all"
+                      className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2 sm:py-2.5 text-xs font-medium text-[#0f172a] placeholder-[#64748b] focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de] transition-all"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b] mb-1.5">
                       GSTIN Number (15 Digits)
                     </label>
                     <input
@@ -504,15 +539,15 @@ export default function CustomersPage() {
                         setHasChanges(true);
                       }}
                       placeholder="24AAAFO1234F1Z9"
-                      className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-[#23160e] placeholder-[#8a7566] focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f] transition-all"
+                      className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2 sm:py-2.5 text-xs font-mono font-bold text-[#0f172a] placeholder-[#64748b] focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de] transition-all"
                     />
                   </div>
                 </div>
 
                 {/* Addresses */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
                   <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b] mb-1.5">
                       Delivery / Factory Address
                     </label>
                     <textarea
@@ -523,12 +558,12 @@ export default function CustomersPage() {
                         setHasChanges(true);
                       }}
                       placeholder="Plot 42, GIDC Industrial Estate, Odhav, Ahmedabad, Gujarat 382415"
-                      className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3.5 py-2 text-xs font-medium text-[#23160e] placeholder-[#8a7566] focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f] transition-all resize-none"
+                      className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2 text-xs font-medium text-[#0f172a] placeholder-[#64748b] focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de] transition-all resize-none"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b] mb-1.5">
                       Billing Address (if different)
                     </label>
                     <textarea
@@ -539,60 +574,60 @@ export default function CustomersPage() {
                         setHasChanges(true);
                       }}
                       placeholder="Corporate Head Office, C.G. Road, Ahmedabad, Gujarat"
-                      className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3.5 py-2 text-xs font-medium text-[#23160e] placeholder-[#8a7566] focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f] transition-all resize-none"
+                      className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3.5 py-2 text-xs font-medium text-[#0f172a] placeholder-[#64748b] focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de] transition-all resize-none"
                     />
                   </div>
                 </div>
 
-                {/* 4 Stat Badges matching the Product page design */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-                  <div className="bg-[#faf7f4] border border-[#ede5dd] rounded-2xl p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#8a7566]">Status</p>
+                {/* 4 Stat Badges */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 pt-1">
+                  <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-2xl p-2.5 sm:p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#64748b]">Status</p>
                     <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#eaf8ea] text-[#1e822d] border border-[#c4eec4]">
                       Active Client
                     </span>
                   </div>
 
-                  <div className="bg-[#faf7f4] border border-[#ede5dd] rounded-2xl p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#8a7566]">Tax Regime</p>
-                    <p className="text-xs font-bold text-[#23160e] mt-1">
+                  <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-2xl p-2.5 sm:p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#64748b]">Tax Regime</p>
+                    <p className="text-xs font-bold text-[#0f172a] mt-1 truncate">
                       {formData.gst_number ? "Regular GSTIN" : "Unregistered"}
                     </p>
                   </div>
 
-                  <div className="bg-[#faf7f4] border border-[#ede5dd] rounded-2xl p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#8a7566]">State Code</p>
-                    <p className="text-xs font-bold text-[#23160e] mt-1">24 - Gujarat</p>
+                  <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-2xl p-2.5 sm:p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#64748b]">State Code</p>
+                    <p className="text-xs font-bold text-[#0f172a] mt-1">24 - Gujarat</p>
                   </div>
 
-                  <div className="bg-[#faf7f4] border border-[#ede5dd] rounded-2xl p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#8a7566]">Payment Term</p>
-                    <p className="text-xs font-bold text-[#23160e] mt-1">15 Days Net</p>
+                  <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-2xl p-2.5 sm:p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#64748b]">Payment Term</p>
+                    <p className="text-xs font-bold text-[#0f172a] mt-1">15 Days Net</p>
                   </div>
                 </div>
 
                 {/* Collapsible Bank & Remittance Section */}
-                <div className="border border-[#ede5dd] rounded-2xl overflow-hidden bg-[#faf7f4]">
+                <div className="border border-[#e2e8f0] rounded-2xl overflow-hidden bg-[#f8fafc]">
                   <button
                     type="button"
                     onClick={() => setShowAdditional(!showAdditional)}
-                    className="w-full px-4 py-3 flex items-center justify-between text-left font-bold text-xs text-[#23160e] hover:bg-[#f4ede6] transition-colors cursor-pointer"
+                    className="w-full px-4 py-3 flex items-center justify-between text-left font-bold text-xs text-[#0f172a] hover:bg-[#f8fafc] transition-colors cursor-pointer"
                   >
                     <div className="flex items-center gap-2">
-                      <Landmark className="w-4 h-4 text-[#5c341f]" />
+                      <Landmark className="w-4 h-4 text-[#0260de]" />
                       <span>Bank &amp; Remittance Details</span>
                     </div>
                     {showAdditional ? (
-                      <ChevronUp className="w-4 h-4 text-[#8a7566]" />
+                      <ChevronUp className="w-4 h-4 text-[#64748b]" />
                     ) : (
-                      <ChevronDown className="w-4 h-4 text-[#8a7566]" />
+                      <ChevronDown className="w-4 h-4 text-[#64748b]" />
                     )}
                   </button>
 
                   {showAdditional && (
-                    <div className="p-4 pt-1 bg-white border-t border-[#ede5dd] grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div className="p-3.5 sm:p-4 pt-1 bg-white border-t border-[#e2e8f0] grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
                       <div>
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-[#8a7566] mb-1">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-[#64748b] mb-1">
                           Bank Name
                         </label>
                         <input
@@ -603,12 +638,12 @@ export default function CustomersPage() {
                             setHasChanges(true);
                           }}
                           placeholder="Bank of Baroda"
-                          className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3 py-2 text-xs font-medium text-[#23160e] focus:outline-none focus:ring-1 focus:ring-[#5c341f]"
+                          className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3 py-2 text-xs font-medium text-[#0f172a] focus:outline-none focus:ring-1 focus:ring-[#0260de]"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-[#8a7566] mb-1">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-[#64748b] mb-1">
                           Account Holder Name
                         </label>
                         <input
@@ -619,12 +654,12 @@ export default function CustomersPage() {
                             setHasChanges(true);
                           }}
                           placeholder="Gujarat Auto Spares"
-                          className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3 py-2 text-xs font-medium text-[#23160e] focus:outline-none focus:ring-1 focus:ring-[#5c341f]"
+                          className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3 py-2 text-xs font-medium text-[#0f172a] focus:outline-none focus:ring-1 focus:ring-[#0260de]"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-[#8a7566] mb-1">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-[#64748b] mb-1">
                           Account Number
                         </label>
                         <input
@@ -635,12 +670,12 @@ export default function CustomersPage() {
                             setHasChanges(true);
                           }}
                           placeholder="01420200001234"
-                          className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3 py-2 text-xs font-mono font-medium text-[#23160e] focus:outline-none focus:ring-1 focus:ring-[#5c341f]"
+                          className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3 py-2 text-xs font-mono font-medium text-[#0f172a] focus:outline-none focus:ring-1 focus:ring-[#0260de]"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[10px] font-bold uppercase tracking-wider text-[#8a7566] mb-1">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-[#64748b] mb-1">
                           IFSC Code
                         </label>
                         <input
@@ -651,7 +686,7 @@ export default function CustomersPage() {
                             setHasChanges(true);
                           }}
                           placeholder="BARB0ODHAVA"
-                          className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3 py-2 text-xs font-mono font-medium text-[#23160e] focus:outline-none focus:ring-1 focus:ring-[#5c341f]"
+                          className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl px-3 py-2 text-xs font-mono font-medium text-[#0f172a] focus:outline-none focus:ring-1 focus:ring-[#0260de]"
                         />
                       </div>
                     </div>

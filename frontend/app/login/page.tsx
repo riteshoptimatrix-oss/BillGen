@@ -33,8 +33,8 @@ export default function LoginPage() {
             <span className="text-2xl font-bold text-gray-900 tracking-tight">BillGenerator</span>
           </div>
 
-          <div className="inline-flex items-center px-3 py-1 rounded-full border border-gray-200 bg-white shadow-sm text-xs font-semibold text-gray-600 mb-8 uppercase tracking-wider">
-            <svg className="w-3 h-3 text-red-600 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="inline-flex items-center px-3 py-1 rounded-full border border-blue-100 bg-white shadow-sm text-xs font-semibold text-blue-700 mb-8 uppercase tracking-wider">
+            <svg className="w-3 h-3 text-[#0260de] mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
             </svg>
             Enterprise Account
@@ -43,7 +43,7 @@ export default function LoginPage() {
           <h1 className="text-5xl xl:text-6xl font-extrabold text-[#0f172a] leading-[1.1] mb-6">
             Start managing your<br />
             billing process<br />
-            <span className="text-[#c51f2a]">today.</span>
+            <span className="text-[#0260de]">today.</span>
           </h1>
 
           <p className="text-lg text-gray-600 mb-12 max-w-lg">
@@ -53,7 +53,7 @@ export default function LoginPage() {
           <div className="space-y-6">
             <div className="flex items-start">
               <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-white shadow-sm border border-gray-100">
-                <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-5 h-5 text-[#0260de]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
                 </svg>
               </div>
@@ -64,7 +64,7 @@ export default function LoginPage() {
 
             <div className="flex items-start">
               <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-white shadow-sm border border-gray-100">
-                <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-5 h-5 text-[#0260de]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
@@ -75,7 +75,7 @@ export default function LoginPage() {
 
             <div className="flex items-start">
               <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-white shadow-sm border border-gray-100">
-                <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-5 h-5 text-[#0260de]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
               </div>
@@ -179,7 +179,7 @@ export default function LoginPage() {
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-[#c51f2a] hover:bg-[#a51923] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors mt-4"
+              className="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-xs text-sm font-bold text-white bg-[#0260de] hover:bg-[#0252bf] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0260de] transition-colors mt-4 active:scale-95 cursor-pointer"
             >
               Sign in to Dashboard
               <svg className="ml-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -110,29 +110,29 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6 pb-16 font-sans">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#ede5dd] pb-5">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 border-b border-[#e2e8f0] pb-4 sm:pb-5">
+        <div className="w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight leading-snug">
               Business &amp; Financial Reports
             </h1>
-            <span className="bg-gray-100 text-gray-700 text-xs font-bold px-3 py-1 rounded-full border border-[#ede5dd] flex items-center gap-1.5">
-              <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <span className="bg-stone-100 text-stone-700 text-[11px] sm:text-xs font-bold px-2.5 sm:px-3 py-1 rounded-full border border-[#e2e8f0] flex items-center gap-1.5 flex-shrink-0">
+              <svg className="w-3.5 h-3.5 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
               View-Only Module
             </span>
           </div>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-xs sm:text-sm text-gray-500 mt-1 max-w-2xl leading-relaxed">
             Centralized read-only reporting. Real-time data compiled automatically from Sales, Purchases, Expenses, Products, and Payroll.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
           <button
             onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-gray-700 bg-white border border-[#ede5dd] rounded-xl hover:bg-gray-50 transition-colors shadow-xs active:scale-95"
+            className="flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 text-xs font-bold text-gray-700 bg-white border border-[#e2e8f0] rounded-xl hover:bg-gray-50 transition-colors shadow-xs active:scale-95 w-full sm:w-auto"
           >
             <svg className="w-3.5 h-3.5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -143,23 +143,23 @@ export default function ReportsPage() {
       </div>
 
       {/* Navigation Tabs Bar */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none border-b border-[#ede5dd]">
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-[#e2e8f0] -mx-3.5 px-3.5 sm:mx-0 sm:px-0 scroll-smooth">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl whitespace-nowrap transition-all ${
+              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 text-xs font-bold rounded-xl whitespace-nowrap transition-all flex-shrink-0 ${
                 isActive
-                  ? "bg-[#5c341f] text-white shadow-sm shadow-amber-900/10"
-                  : "bg-white text-gray-600 border border-[#ede5dd] hover:bg-gray-50 hover:text-gray-900"
+                  ? "bg-[#0260de] text-white shadow-sm shadow-blue-500/10"
+                  : "bg-white text-gray-600 border border-[#e2e8f0] hover:bg-gray-50 hover:text-gray-900"
               }`}
             >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={tab.icon} />
               </svg>
-              {tab.label}
+              <span>{tab.label}</span>
             </button>
           );
         })}
@@ -167,9 +167,11 @@ export default function ReportsPage() {
 
       {/* Date Filter Bar (Shown for tabs that support date ranges) */}
       {activeTab !== "stock-statement" && activeTab !== "labour-payroll" && (
-        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-[#ede5dd] shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4">
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mr-1">Date Period:</span>
+        <div className="bg-white p-3 sm:p-4 rounded-2xl border border-[#e2e8f0] shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4 w-full">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full md:w-auto">
+            <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider mr-1">
+              Date Period:
+            </span>
             {(["today", "week", "month", "all", "custom"] as DateFilterType[]).map((df) => (
               <button
                 key={df}
@@ -186,21 +188,25 @@ export default function ReportsPage() {
           </div>
 
           {dateFilter === "custom" && (
-            <div className="flex flex-wrap items-center gap-2 text-xs w-full sm:w-auto">
-              <span className="text-gray-500 font-medium">From:</span>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="px-2.5 py-1 bg-gray-50 border border-[#ede5dd] rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-gray-900"
-              />
-              <span className="text-gray-500 font-medium">To:</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="px-2.5 py-1 bg-gray-50 border border-[#ede5dd] rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-gray-900"
-              />
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 text-xs w-full md:w-auto pt-2 md:pt-0 border-t md:border-t-0 border-[#e2e8f0]">
+              <div className="flex items-center gap-1.5">
+                <span className="text-gray-500 font-medium">From:</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full sm:w-auto px-2.5 py-1.5 bg-gray-50 border border-[#e2e8f0] rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-gray-900"
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-gray-500 font-medium">To:</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full sm:w-auto px-2.5 py-1.5 bg-gray-50 border border-[#e2e8f0] rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-gray-900"
+                />
+              </div>
             </div>
           )}
         </div>
@@ -208,14 +214,14 @@ export default function ReportsPage() {
 
       {/* Month & Year Filter for Labour Payroll */}
       {activeTab === "labour-payroll" && (
-        <div className="bg-white p-4 rounded-2xl border border-[#ede5dd] shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+        <div className="bg-white p-3 sm:p-4 rounded-2xl border border-[#e2e8f0] shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 w-full">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Select Payroll Month:</span>
             <select
               value={payrollMonth}
               onChange={(e) => setPayrollMonth(Number(e.target.value))}
               aria-label="Payroll Month"
-              className="px-3 py-1.5 bg-gray-50 border border-[#ede5dd] rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-gray-900"
+              className="px-3 py-1.5 bg-gray-50 border border-[#e2e8f0] rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-gray-900"
             >
               {months.map((m, idx) => (
                 <option key={m} value={idx + 1}>{m}</option>
@@ -226,7 +232,7 @@ export default function ReportsPage() {
               value={payrollYear}
               onChange={(e) => setPayrollYear(Number(e.target.value))}
               aria-label="Payroll Year"
-              className="px-3 py-1.5 bg-gray-50 border border-[#ede5dd] rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-gray-900"
+              className="px-3 py-1.5 bg-gray-50 border border-[#e2e8f0] rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-gray-900"
             >
               {[2025, 2026, 2027].map((y) => (
                 <option key={y} value={y}>{y}</option>
@@ -242,8 +248,8 @@ export default function ReportsPage() {
 
       {/* Loading Indicator */}
       {isLoading ? (
-        <div className="bg-white rounded-2xl border border-[#ede5dd] p-16 text-center shadow-xs">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#5c341f]"></div>
+        <div className="bg-white rounded-2xl border border-[#e2e8f0] p-10 sm:p-16 text-center shadow-xs w-full flex flex-col items-center justify-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#0260de]"></div>
           <p className="text-xs text-gray-400 mt-2 font-medium">Compiling dynamic report data...</p>
         </div>
       ) : (
@@ -254,8 +260,8 @@ export default function ReportsPage() {
           {activeTab === "sales-register" && salesData && (
             <div className="space-y-6">
               {/* Summary Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Sales (Base)</p>
                   <h3 className="text-2xl font-black text-gray-900 mt-1">
                     ₹{(salesData.summary?.totalSalesAmount || 0).toLocaleString("en-IN")}
@@ -263,7 +269,7 @@ export default function ReportsPage() {
                   <p className="text-[11px] text-gray-400 mt-1">Taxable turnover</p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total GST Collected</p>
                   <h3 className="text-2xl font-black text-emerald-600 mt-1">
                     ₹{(salesData.summary?.totalGstAmount || 0).toLocaleString("en-IN")}
@@ -271,15 +277,15 @@ export default function ReportsPage() {
                   <p className="text-[11px] text-emerald-600/80 mt-1">Output GST (CGST + SGST)</p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Invoiced Amount</p>
-                  <h3 className="text-2xl font-black text-[#5c341f] mt-1">
+                  <h3 className="text-2xl font-black text-[#0260de] mt-1">
                     ₹{(salesData.summary?.totalInvoicedAmount || 0).toLocaleString("en-IN")}
                   </h3>
                   <p className="text-[11px] text-red-600/80 mt-1">Gross sales including GST</p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Sales Invoices</p>
                   <h3 className="text-2xl font-black text-gray-900 mt-1">
                     {salesData.summary?.totalCount || 0}
@@ -291,8 +297,8 @@ export default function ReportsPage() {
               </div>
 
               {/* Sales Register Table */}
-              <div className="bg-white rounded-2xl border border-[#ede5dd] shadow-xs overflow-hidden">
-                <div className="p-4 px-6 border-b border-[#ede5dd] flex justify-between items-center bg-gray-50/50">
+              <div className="bg-white rounded-2xl border border-[#e2e8f0] shadow-xs overflow-hidden">
+                <div className="p-4 px-6 border-b border-[#e2e8f0] flex justify-between items-center bg-gray-50/50">
                   <h3 className="text-sm font-black text-gray-800">Sales Transactions Register</h3>
                   <span className="text-xs text-gray-500 font-medium">View-Only</span>
                 </div>
@@ -303,8 +309,8 @@ export default function ReportsPage() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#ede5dd]">
+                    <table className="w-full min-w-[650px] text-left text-xs">
+                      <thead className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#e2e8f0]">
                         <tr>
                           <th className="py-3 px-6">Invoice #</th>
                           <th className="py-3 px-6">Customer Name</th>
@@ -336,12 +342,12 @@ export default function ReportsPage() {
                           </tr>
                         ))}
                       </tbody>
-                      <tfoot className="bg-gray-50/80 font-black text-xs text-gray-900 border-t border-[#ede5dd]">
+                      <tfoot className="bg-gray-50/80 font-black text-xs text-gray-900 border-t border-[#e2e8f0]">
                         <tr>
                           <td className="py-3 px-6" colSpan={3}>Total for Selected Period:</td>
                           <td className="py-3 px-6 text-right">₹{salesData.summary?.totalSalesAmount?.toLocaleString("en-IN")}</td>
                           <td className="py-3 px-6 text-right text-emerald-600">₹{salesData.summary?.totalGstAmount?.toLocaleString("en-IN")}</td>
-                          <td className="py-3 px-6 text-right text-[#5c341f]">₹{salesData.summary?.totalInvoicedAmount?.toLocaleString("en-IN")}</td>
+                          <td className="py-3 px-6 text-right text-[#0260de]">₹{salesData.summary?.totalInvoicedAmount?.toLocaleString("en-IN")}</td>
                           <td className="py-3 px-6"></td>
                         </tr>
                       </tfoot>
@@ -358,8 +364,8 @@ export default function ReportsPage() {
           {activeTab === "purchase-register" && purchaseData && (
             <div className="space-y-6">
               {/* Summary Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Purchase (Base)</p>
                   <h3 className="text-2xl font-black text-gray-900 mt-1">
                     ₹{(purchaseData.summary?.totalPurchaseAmount || 0).toLocaleString("en-IN")}
@@ -367,7 +373,7 @@ export default function ReportsPage() {
                   <p className="text-[11px] text-gray-400 mt-1">Taxable materials cost</p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Input GST Paid</p>
                   <h3 className="text-2xl font-black text-blue-600 mt-1">
                     ₹{(purchaseData.summary?.totalGstAmount || 0).toLocaleString("en-IN")}
@@ -375,7 +381,7 @@ export default function ReportsPage() {
                   <p className="text-[11px] text-blue-600/80 mt-1">Eligible Input Tax Credit (ITC)</p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Purchase Invoiced</p>
                   <h3 className="text-2xl font-black text-indigo-600 mt-1">
                     ₹{(purchaseData.summary?.totalInvoicedAmount || 0).toLocaleString("en-IN")}
@@ -383,7 +389,7 @@ export default function ReportsPage() {
                   <p className="text-[11px] text-indigo-600/80 mt-1">Gross purchase expenses</p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Purchase Records</p>
                   <h3 className="text-2xl font-black text-gray-900 mt-1">
                     {purchaseData.summary?.totalCount || 0}
@@ -395,8 +401,8 @@ export default function ReportsPage() {
               </div>
 
               {/* Purchase Table */}
-              <div className="bg-white rounded-2xl border border-[#ede5dd] shadow-xs overflow-hidden">
-                <div className="p-4 px-6 border-b border-[#ede5dd] flex justify-between items-center bg-gray-50/50">
+              <div className="bg-white rounded-2xl border border-[#e2e8f0] shadow-xs overflow-hidden">
+                <div className="p-4 px-6 border-b border-[#e2e8f0] flex justify-between items-center bg-gray-50/50">
                   <h3 className="text-sm font-black text-gray-800">Purchase Register Statement</h3>
                   <span className="text-xs text-gray-500 font-medium">View-Only</span>
                 </div>
@@ -407,8 +413,8 @@ export default function ReportsPage() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#ede5dd]">
+                    <table className="w-full min-w-[650px] text-left text-xs">
+                      <thead className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#e2e8f0]">
                         <tr>
                           <th className="py-3 px-6">Purchase / Bill #</th>
                           <th className="py-3 px-6">Supplier / Vendor Name</th>
@@ -440,7 +446,7 @@ export default function ReportsPage() {
                           </tr>
                         ))}
                       </tbody>
-                      <tfoot className="bg-gray-50/80 font-black text-xs text-gray-900 border-t border-[#ede5dd]">
+                      <tfoot className="bg-gray-50/80 font-black text-xs text-gray-900 border-t border-[#e2e8f0]">
                         <tr>
                           <td className="py-3 px-6" colSpan={3}>Total for Selected Period:</td>
                           <td className="py-3 px-6 text-right">₹{purchaseData.summary?.totalPurchaseAmount?.toLocaleString("en-IN")}</td>
@@ -462,8 +468,8 @@ export default function ReportsPage() {
           {activeTab === "expenses-statement" && expensesData && (
             <div className="space-y-6">
               {/* Summary Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Business Expenses</p>
                   <h3 className="text-2xl font-black text-gray-900 mt-1">
                     ₹{(expensesData.summary?.totalExpenses || 0).toLocaleString("en-IN")}
@@ -471,7 +477,7 @@ export default function ReportsPage() {
                   <p className="text-[11px] text-gray-400 mt-1">Operating expenditure</p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Expense Entries</p>
                   <h3 className="text-2xl font-black text-gray-900 mt-1">
                     {expensesData.summary?.totalCount || 0}
@@ -479,7 +485,7 @@ export default function ReportsPage() {
                   <p className="text-[11px] text-gray-400 mt-1">Incurred transactions</p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Average Expense Size</p>
                   <h3 className="text-2xl font-black text-amber-600 mt-1">
                     ₹{(expensesData.summary?.averageExpense || 0).toLocaleString("en-IN")}
@@ -487,7 +493,7 @@ export default function ReportsPage() {
                   <p className="text-[11px] text-amber-600/80 mt-1">Per transaction avg</p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Top Category</p>
                   <h3 className="text-lg font-black text-gray-900 mt-1 truncate">
                     {expensesData.summary?.categoryBreakdown?.[0]?.category || "General Operations"}
@@ -499,8 +505,8 @@ export default function ReportsPage() {
               </div>
 
               {/* Expenses Table */}
-              <div className="bg-white rounded-2xl border border-[#ede5dd] shadow-xs overflow-hidden">
-                <div className="p-4 px-6 border-b border-[#ede5dd] flex justify-between items-center bg-gray-50/50">
+              <div className="bg-white rounded-2xl border border-[#e2e8f0] shadow-xs overflow-hidden">
+                <div className="p-4 px-6 border-b border-[#e2e8f0] flex justify-between items-center bg-gray-50/50">
                   <h3 className="text-sm font-black text-gray-800">Business Expenses Statement</h3>
                   <span className="text-xs text-gray-500 font-medium">View-Only</span>
                 </div>
@@ -511,8 +517,8 @@ export default function ReportsPage() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#ede5dd]">
+                    <table className="w-full min-w-[650px] text-left text-xs">
+                      <thead className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#e2e8f0]">
                         <tr>
                           <th className="py-3 px-6">Expense Date</th>
                           <th className="py-3 px-6">Category</th>
@@ -540,10 +546,10 @@ export default function ReportsPage() {
                           </tr>
                         ))}
                       </tbody>
-                      <tfoot className="bg-gray-50/80 font-black text-xs text-gray-900 border-t border-[#ede5dd]">
+                      <tfoot className="bg-gray-50/80 font-black text-xs text-gray-900 border-t border-[#e2e8f0]">
                         <tr>
                           <td className="py-3 px-6" colSpan={3}>Total Expenses for Selected Period:</td>
-                          <td className="py-3 px-6 text-right text-[#5c341f]">
+                          <td className="py-3 px-6 text-right text-[#0260de]">
                             ₹{expensesData.summary?.totalExpenses?.toLocaleString("en-IN")}
                           </td>
                           <td className="py-3 px-6"></td>
@@ -562,8 +568,8 @@ export default function ReportsPage() {
           {activeTab === "gst-summary" && gstData && (
             <div className="space-y-6">
               {/* Summary Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Output GST (Collected)</p>
                   <h3 className="text-2xl font-black text-emerald-600 mt-1">
                     ₹{(gstData.summary?.outputGst || 0).toLocaleString("en-IN")}
@@ -571,7 +577,7 @@ export default function ReportsPage() {
                   <p className="text-[11px] text-gray-400 mt-1">GST collected on Sales</p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Input GST (Paid / ITC)</p>
                   <h3 className="text-2xl font-black text-blue-600 mt-1">
                     ₹{(gstData.summary?.inputGst || 0).toLocaleString("en-IN")}
@@ -579,7 +585,7 @@ export default function ReportsPage() {
                   <p className="text-[11px] text-gray-400 mt-1">Eligible tax credit on Purchases</p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Net GST Payable</p>
                   <h3 className={`text-2xl font-black mt-1 ${
                     gstData.summary?.netGstPayable >= 0 ? "text-amber-600" : "text-emerald-600"
@@ -593,7 +599,7 @@ export default function ReportsPage() {
                   </p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Taxable Sales Turnover</p>
                   <h3 className="text-2xl font-black text-gray-900 mt-1">
                     ₹{(gstData.summary?.totalSalesTaxable || 0).toLocaleString("en-IN")}
@@ -603,15 +609,15 @@ export default function ReportsPage() {
               </div>
 
               {/* Rate-Wise Breakdown Table */}
-              <div className="bg-white rounded-2xl border border-[#ede5dd] shadow-xs overflow-hidden">
-                <div className="p-4 px-6 border-b border-[#ede5dd] flex justify-between items-center bg-gray-50/50">
+              <div className="bg-white rounded-2xl border border-[#e2e8f0] shadow-xs overflow-hidden">
+                <div className="p-4 px-6 border-b border-[#e2e8f0] flex justify-between items-center bg-gray-50/50">
                   <h3 className="text-sm font-black text-gray-800">GST Breakdown by Tax Rate Slabs</h3>
                   <span className="text-xs text-gray-500 font-medium">Standard CGST + SGST Split</span>
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#ede5dd]">
+                  <table className="w-full min-w-[650px] text-left text-xs">
+                    <thead className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#e2e8f0]">
                       <tr>
                         <th className="py-3 px-6">Tax Rate Slab</th>
                         <th className="py-3 px-6 text-right">Output Taxable (Sales)</th>
@@ -635,7 +641,7 @@ export default function ReportsPage() {
                         </tr>
                       ))}
                     </tbody>
-                    <tfoot className="bg-gray-50/80 font-black text-xs text-gray-900 border-t border-[#ede5dd]">
+                    <tfoot className="bg-gray-50/80 font-black text-xs text-gray-900 border-t border-[#e2e8f0]">
                       <tr>
                         <td className="py-3 px-6">Total Overall GST:</td>
                         <td className="py-3 px-6 text-right">₹{gstData.summary?.totalSalesTaxable?.toLocaleString("en-IN")}</td>
@@ -702,20 +708,20 @@ export default function ReportsPage() {
               )}
 
               {/* Summary Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Products Tracked</p>
                   <h3 className="text-2xl font-black text-gray-900 mt-1">{stockData.summary?.totalProducts || 0}</h3>
                   <p className="text-[11px] text-gray-400 mt-1">Manufacturing items</p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Stock on Hand</p>
                   <h3 className="text-2xl font-black text-blue-600 mt-1">{stockData.summary?.totalUnits || 0}</h3>
                   <p className="text-[11px] text-blue-600/80 mt-1">Total physical units in plant</p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Inventory Valuation</p>
                   <h3 className="text-2xl font-black text-emerald-600 mt-1">
                     ₹{(stockData.summary?.totalValuation || 0).toLocaleString("en-IN")}
@@ -723,7 +729,7 @@ export default function ReportsPage() {
                   <p className="text-[11px] text-emerald-600/80 mt-1">At current unit rates</p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Critical Low Stock</p>
                   <h3 className={`text-2xl font-black mt-1 ${stockData.summary?.lowStockCount > 0 ? "text-rose-600" : "text-emerald-600"}`}>
                     {stockData.summary?.lowStockCount || 0}
@@ -733,15 +739,15 @@ export default function ReportsPage() {
               </div>
 
               {/* Stock Position Table */}
-              <div className="bg-white rounded-2xl border border-[#ede5dd] shadow-xs overflow-hidden">
-                <div className="p-4 px-6 border-b border-[#ede5dd] flex justify-between items-center bg-gray-50/50">
+              <div className="bg-white rounded-2xl border border-[#e2e8f0] shadow-xs overflow-hidden">
+                <div className="p-4 px-6 border-b border-[#e2e8f0] flex justify-between items-center bg-gray-50/50">
                   <h3 className="text-sm font-black text-gray-800">Current Stock &amp; Inventory Position</h3>
                   <span className="text-xs text-gray-500 font-medium">Auto-derived from Products &amp; Sales</span>
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#ede5dd]">
+                  <table className="w-full min-w-[650px] text-left text-xs">
+                    <thead className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#e2e8f0]">
                       <tr>
                         <th className="py-3 px-6">Product Code / SKU</th>
                         <th className="py-3 px-6">Product Name</th>
@@ -793,7 +799,7 @@ export default function ReportsPage() {
                         </tr>
                       ))}
                     </tbody>
-                    <tfoot className="bg-gray-50/80 font-black text-xs text-gray-900 border-t border-[#ede5dd]">
+                    <tfoot className="bg-gray-50/80 font-black text-xs text-gray-900 border-t border-[#e2e8f0]">
                       <tr>
                         <td className="py-3 px-6" colSpan={5}>Total Inventory Valuation:</td>
                         <td className="py-3 px-6 text-center text-blue-600">{stockData.summary?.totalUnits} units</td>
@@ -816,33 +822,33 @@ export default function ReportsPage() {
           {activeTab === "profit-loss" && plData && (
             <div className="space-y-6">
               {/* Highlight Banner: Final Net Profit or Loss */}
-              <div className={`p-6 rounded-3xl border-2 shadow-sm ${
+              <div className={`p-4 sm:p-6 rounded-2xl sm:rounded-3xl border-2 shadow-sm ${
                 plData.summary?.isProfit
                   ? "bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border-emerald-300"
                   : "bg-gradient-to-r from-rose-500/10 via-rose-500/5 to-transparent border-rose-300"
               }`}>
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
                   <div>
-                    <span className={`text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full ${
+                    <span className={`text-[10px] sm:text-[11px] font-black uppercase tracking-wider px-2.5 sm:px-3 py-1 rounded-full ${
                       plData.summary?.isProfit ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"
                     }`}>
                       {plData.summary?.isProfit ? "Business Operating in Surplus" : "Operating in Net Deficit"}
                     </span>
-                    <h2 className={`text-3xl font-black mt-2 tracking-tight ${
+                    <h2 className={`text-2xl sm:text-3xl font-black mt-2 tracking-tight ${
                       plData.summary?.isProfit ? "text-emerald-700" : "text-rose-700"
                     }`}>
                       {plData.summary?.isProfit
                         ? `Net Profit: +₹${plData.summary?.netProfit?.toLocaleString("en-IN")}`
                         : `Net Loss: -₹${plData.summary?.totalLoss?.toLocaleString("en-IN")}`}
                     </h2>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">
                       Calculated as: Gross Sales (₹{plData.summary?.totalSales?.toLocaleString("en-IN")}) - Purchases (₹{plData.summary?.totalPurchases?.toLocaleString("en-IN")}) - Operating Expenses (₹{plData.summary?.totalOperatingExpenses?.toLocaleString("en-IN")})
                     </p>
                   </div>
 
-                  <div className="text-right">
+                  <div className="sm:text-right mt-2 sm:mt-0">
                     <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Net Margin</p>
-                    <p className={`text-2xl font-black mt-0.5 ${
+                    <p className={`text-xl sm:text-2xl font-black mt-0.5 ${
                       plData.summary?.isProfit ? "text-emerald-700" : "text-rose-700"
                     }`}>
                       {plData.summary?.netMarginPercent}%
@@ -852,8 +858,8 @@ export default function ReportsPage() {
               </div>
 
               {/* Summary Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Sales / Revenue</p>
                   <h3 className="text-2xl font-black text-gray-900 mt-1">
                     ₹{(plData.summary?.totalSales || 0).toLocaleString("en-IN")}
@@ -861,7 +867,7 @@ export default function ReportsPage() {
                   <p className="text-[11px] text-gray-400 mt-1">Gross sales invoices</p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Purchase Cost</p>
                   <h3 className="text-2xl font-black text-blue-600 mt-1">
                     ₹{(plData.summary?.totalPurchases || 0).toLocaleString("en-IN")}
@@ -869,7 +875,7 @@ export default function ReportsPage() {
                   <p className="text-[11px] text-gray-400 mt-1">Raw materials &amp; assemblies</p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Gross Profit</p>
                   <h3 className="text-2xl font-black text-emerald-600 mt-1">
                     ₹{(plData.summary?.grossProfit || 0).toLocaleString("en-IN")}
@@ -879,7 +885,7 @@ export default function ReportsPage() {
                   </p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Operating Expenses</p>
                   <h3 className="text-2xl font-black text-rose-600 mt-1">
                     ₹{(plData.summary?.totalOperatingExpenses || 0).toLocaleString("en-IN")}
@@ -891,8 +897,8 @@ export default function ReportsPage() {
               </div>
 
               {/* P&L Statement Ledger Table */}
-              <div className="bg-white rounded-2xl border border-[#ede5dd] shadow-xs overflow-hidden">
-                <div className="p-4 px-6 border-b border-[#ede5dd] flex justify-between items-center bg-gray-50/50">
+              <div className="bg-white rounded-2xl border border-[#e2e8f0] shadow-xs overflow-hidden">
+                <div className="p-4 px-6 border-b border-[#e2e8f0] flex justify-between items-center bg-gray-50/50">
                   <h3 className="text-sm font-black text-gray-800">Financial Statement Breakdown</h3>
                   <span className="text-xs text-gray-500 font-medium">Standard P&amp;L Format</span>
                 </div>
@@ -910,10 +916,10 @@ export default function ReportsPage() {
                       <div
                         key={idx}
                         className={`flex justify-between items-center py-2.5 px-4 rounded-xl text-xs transition-colors ${
-                          isSubtotal ? "bg-gray-100 font-black text-gray-900 border border-[#ede5dd]" :
+                          isSubtotal ? "bg-gray-100 font-black text-gray-900 border border-[#e2e8f0]" :
                           isNetProfit ? "bg-emerald-500 text-white font-black text-sm shadow-sm" :
                           isNetLoss ? "bg-rose-500 text-white font-black text-sm shadow-sm" :
-                          "border-b border-[#ede5dd] text-gray-700 font-semibold"
+                          "border-b border-[#e2e8f0] text-gray-700 font-semibold"
                         }`}
                       >
                         <span className="flex items-center gap-2">
@@ -941,8 +947,8 @@ export default function ReportsPage() {
           {activeTab === "labour-payroll" && payrollData && (
             <div className="space-y-6">
               {/* Summary Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Labour Force</p>
                   <h3 className="text-2xl font-black text-gray-900 mt-1">
                     {payrollData.summary?.totalLabourers || 0} Workers
@@ -950,7 +956,7 @@ export default function ReportsPage() {
                   <p className="text-[11px] text-gray-400 mt-1">Active factory employees</p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Salary Paid</p>
                   <h3 className="text-2xl font-black text-emerald-600 mt-1">
                     ₹{(payrollData.summary?.totalSalaryPaid || 0).toLocaleString("en-IN")}
@@ -960,7 +966,7 @@ export default function ReportsPage() {
                   </p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Pending Salary Amount</p>
                   <h3 className="text-2xl font-black text-amber-600 mt-1">
                     ₹{(payrollData.summary?.pendingSalaryAmount || 0).toLocaleString("en-IN")}
@@ -970,7 +976,7 @@ export default function ReportsPage() {
                   </p>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-[#ede5dd] shadow-xs">
+                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
                   <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Monthly Payroll</p>
                   <h3 className="text-2xl font-black text-gray-900 mt-1">
                     ₹{(payrollData.summary?.totalPayrollExpense || 0).toLocaleString("en-IN")}
@@ -982,8 +988,8 @@ export default function ReportsPage() {
               </div>
 
               {/* Payroll Statement Table */}
-              <div className="bg-white rounded-2xl border border-[#ede5dd] shadow-xs overflow-hidden">
-                <div className="p-4 px-6 border-b border-[#ede5dd] flex justify-between items-center bg-gray-50/50">
+              <div className="bg-white rounded-2xl border border-[#e2e8f0] shadow-xs overflow-hidden">
+                <div className="p-4 px-6 border-b border-[#e2e8f0] flex justify-between items-center bg-gray-50/50">
                   <h3 className="text-sm font-black text-gray-800">
                     Labour Salary Payroll · {payrollData.selectedPeriod?.monthName}
                   </h3>
@@ -996,8 +1002,8 @@ export default function ReportsPage() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#ede5dd]">
+                    <table className="w-full min-w-[650px] text-left text-xs">
+                      <thead className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#e2e8f0]">
                         <tr>
                           <th className="py-3 px-6">Labour ID</th>
                           <th className="py-3 px-6">Labour Name</th>
@@ -1031,10 +1037,10 @@ export default function ReportsPage() {
                           </tr>
                         ))}
                       </tbody>
-                      <tfoot className="bg-gray-50/80 font-black text-xs text-gray-900 border-t border-[#ede5dd]">
+                      <tfoot className="bg-gray-50/80 font-black text-xs text-gray-900 border-t border-[#e2e8f0]">
                         <tr>
                           <td className="py-3 px-6" colSpan={3}>Total Monthly Payroll:</td>
-                          <td className="py-3 px-6 text-right text-[#5c341f]">
+                          <td className="py-3 px-6 text-right text-[#0260de]">
                             ₹{payrollData.summary?.totalPayrollExpense?.toLocaleString("en-IN")}
                           </td>
                           <td className="py-3 px-6" colSpan={3}></td>

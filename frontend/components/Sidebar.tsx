@@ -67,7 +67,7 @@ const navIcons = {
     </svg>
   ),
   doubleChevronLeft: (
-    <svg className="w-4 h-4 flex-shrink-0 text-[#8c6b57]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+    <svg className="w-4 h-4 flex-shrink-0 text-[#64748b]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
     </svg>
   )
@@ -144,81 +144,90 @@ export default function Sidebar({
   };
 
   // ============================================================================
-  // 1. VERTICAL MAHOGANY ICON RAIL (Matching the user's reference image exactly)
+  // 1. VERTICAL EXECUTIVE NAVY ICON RAIL (Aligned 1-to-1 with Expanded Menu)
   // ============================================================================
   const verticalIconRail = (
-    <div className="relative flex w-16 sm:w-[68px] flex-col items-center justify-between py-5 overflow-hidden bg-gradient-to-b from-[#6b3e26] via-[#5a331e] to-[#432415] text-white flex-shrink-0 select-none shadow-lg shadow-stone-900/10 h-full rounded-[26px]">
+    <div className="relative flex w-16 sm:w-[68px] flex-col items-center justify-between py-5 overflow-hidden bg-gradient-to-b from-[#0b192c] via-[#0d2a4a] to-[#08121f] text-white flex-shrink-0 select-none shadow-lg shadow-slate-900/20 h-full rounded-[26px]">
       {/* Decorative contoured radial gradient grain */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-15"
+        className="pointer-events-none absolute inset-0 opacity-20"
         style={{
-          backgroundImage: `radial-gradient(ellipse at 100% 30%, rgba(255,255,255,0.4) 0%, transparent 60%), radial-gradient(ellipse at 0% 75%, rgba(0,0,0,0.5) 0%, transparent 50%)`
+          backgroundImage: `radial-gradient(ellipse at 100% 30%, rgba(2,96,222,0.4) 0%, transparent 60%), radial-gradient(ellipse at 0% 75%, rgba(0,0,0,0.5) 0%, transparent 50%)`
         }}
       />
 
-      {/* Top Section: Toggle / Expand button */}
-      <div className="w-full flex flex-col items-center space-y-2.5 z-10">
-        <button
-          type="button"
-          onClick={() => {
-            if (isCollapsed) {
-              setIsCollapsed(false);
-            } else if (onOpenMobileDrawer) {
-              onOpenMobileDrawer();
-            } else {
-              setIsCollapsed(!isCollapsed);
-            }
-          }}
-          title={isCollapsed ? "Expand Sidebar" : "Menu"}
-          className="w-10 h-10 rounded-2xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all duration-200 active:scale-95 cursor-pointer shadow-xs mb-1"
-        >
-          {isCollapsed ? navIcons.doubleChevronRight : (
-            <div className="flex flex-col items-center justify-center font-black text-xs">
-              <span>SV</span>
-            </div>
-          )}
-        </button>
+      {/* Top Section: Aligned Brand SV Button + Navigation Groups */}
+      <div className="w-full flex flex-col items-center z-10">
+        {/* Top SV Brand Button - Height 40px + mb-6 matches Expanded Menu Header */}
+        <div className="h-10 mb-6 flex items-center justify-center">
+          <button
+            type="button"
+            onClick={() => {
+              if (isCollapsed) {
+                setIsCollapsed(false);
+              } else if (onOpenMobileDrawer) {
+                onOpenMobileDrawer();
+              } else {
+                setIsCollapsed(!isCollapsed);
+              }
+            }}
+            title={isCollapsed ? "Expand Sidebar" : "Menu"}
+            className="w-10 h-10 rounded-2xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all duration-200 active:scale-95 cursor-pointer shadow-xs"
+          >
+            {isCollapsed ? navIcons.doubleChevronRight : (
+              <div className="flex flex-col items-center justify-center font-black text-xs">
+                <span>SV</span>
+              </div>
+            )}
+          </button>
+        </div>
 
-        {/* Navigation icons grouped with thin dividers matching reference image */}
-        <div className="w-full flex flex-col items-center space-y-1.5">
+        {/* Navigation icons grouped with heights identical to right panel */}
+        <div className="w-full flex flex-col items-center space-y-4">
           {navigationGroups.map((group, gIdx) => (
             <div key={gIdx} className="w-full flex flex-col items-center">
-              {/* Thin white/20 divider line */}
-              {gIdx > 0 && (
-                <div className="my-2 h-[1px] w-7 bg-white/20" />
-              )}
+              {/* Category spacer / divider line matching the h-5 mb-1 group title on the right */}
+              <div className="h-5 mb-1 flex items-center justify-center w-full">
+                {gIdx > 0 ? (
+                  <div className="h-[1px] w-7 bg-white/20" />
+                ) : (
+                  <div className="h-[1px] w-7 opacity-0" />
+                )}
+              </div>
 
-              {group.items.map((item) => {
-                const active = isRouteActive(item.href);
-                return (
-                  <Link
-                    key={item.id}
-                    href={item.href}
-                    onClick={() => onClose?.()}
-                    title={item.name}
-                    className={`relative flex items-center justify-center transition-all duration-200 my-0.5 ${
-                      active
-                        ? "h-11 w-11 rounded-2xl bg-[#faf7f4] text-[#3d2215] shadow-md shadow-stone-900/25 font-black scale-105"
-                        : "h-10 w-10 rounded-2xl text-white/80 hover:bg-white/10 hover:text-white"
-                    }`}
-                  >
-                    {item.icon}
-                  </Link>
-                );
-              })}
+              {/* Items row - h-10 + space-y-1 matching the right panel buttons */}
+              <div className="space-y-1 flex flex-col items-center w-full">
+                {group.items.map((item) => {
+                  const active = isRouteActive(item.href);
+                  return (
+                    <Link
+                      key={item.id}
+                      href={item.href}
+                      onClick={() => onClose?.()}
+                      title={item.name}
+                      className={`relative flex items-center justify-center transition-all duration-200 h-10 w-10 rounded-2xl ${
+                        active
+                          ? "bg-white text-[#0260de] shadow-lg shadow-black/20 font-black scale-100"
+                          : "text-slate-300 hover:bg-white/10 hover:text-white"
+                      }`}
+                    >
+                      {item.icon}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Bottom Section: Thin Divider + Logout */}
-      <div className="z-10 w-full flex flex-col items-center pt-1">
-        <div className="my-2 h-[1px] w-7 bg-white/20" />
+      {/* Bottom Section: Aligned Logout Button */}
+      <div className="z-10 w-full flex flex-col items-center pt-4">
         <button
           type="button"
           onClick={handleLogout}
           title="Log Out"
-          className="flex h-10 w-10 items-center justify-center rounded-2xl text-white/70 hover:bg-white/15 hover:text-white transition-all cursor-pointer active:scale-95"
+          className="flex h-10 w-10 items-center justify-center rounded-2xl text-slate-300 hover:bg-white/15 hover:text-white transition-all cursor-pointer active:scale-95"
         >
           {navIcons.logout}
         </button>
@@ -227,26 +236,26 @@ export default function Sidebar({
   );
 
   // ============================================================================
-  // 2. EXPANDED RIGHT MENU PANEL (Warm Light Cream)
+  // 2. EXPANDED RIGHT MENU PANEL (Modern Pure White)
   // ============================================================================
   const expandedMenuPanel = (
-    <div className="flex flex-1 flex-col justify-between overflow-y-auto bg-[#faf7f4] px-4 py-5 transition-all duration-300 min-w-[210px] rounded-r-[26px]">
+    <div className="flex flex-1 flex-col justify-between overflow-y-auto bg-white px-4 py-5 transition-all duration-300 min-w-[210px] rounded-r-[26px]">
       <div>
-        {/* Brand Header */}
-        <div className="mb-6 flex items-center justify-between px-1">
+        {/* Brand Header - Height 40px + mb-6 */}
+        <div className="h-10 mb-6 flex items-center justify-between px-1">
           <Link
             href="/dashboard"
             onClick={() => onClose?.()}
             className="flex items-center gap-3 group"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#5c341f] text-white font-black text-sm shadow-xs group-hover:scale-105 transition-transform">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#0260de] text-white font-black text-sm shadow-xs group-hover:scale-105 transition-transform shrink-0">
               SV
             </div>
             <div className="flex flex-col">
-              <span className="text-base font-black text-[#261710] tracking-tight leading-tight">
+              <span className="text-base font-black text-[#0f172a] tracking-tight leading-tight">
                 SiddhiVinayak
               </span>
-              <span className="text-[9px] font-bold text-[#8c6b57] tracking-wider uppercase mt-0.5">
+              <span className="text-[9px] font-bold text-[#64748b] tracking-wider uppercase mt-0.5">
                 Enterprise Billing
               </span>
             </div>
@@ -260,7 +269,7 @@ export default function Sidebar({
               setIsCollapsed(true);
             }}
             title="Collapse sidebar"
-            className="p-1.5 rounded-xl text-[#8c6b57] hover:bg-[#ede3da] hover:text-[#5c341f] transition-colors cursor-pointer"
+            className="p-1.5 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-pointer"
           >
             {navIcons.doubleChevronLeft}
           </button>
@@ -270,9 +279,14 @@ export default function Sidebar({
         <div className="space-y-4">
           {navigationGroups.map((group, idx) => (
             <div key={idx}>
-              <h3 className="px-3 text-[10px] font-bold text-[#8c6b57] uppercase tracking-wider mb-1">
-                {group.title}
-              </h3>
+              {/* Category Header with explicit h-5 mb-1 */}
+              <div className="h-5 mb-1 flex items-center">
+                <h3 className="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  {group.title}
+                </h3>
+              </div>
+
+              {/* Items in group with explicit h-10 */}
               <div className="space-y-1">
                 {group.items.map((item) => {
                   const active = isRouteActive(item.href);
@@ -281,21 +295,21 @@ export default function Sidebar({
                       key={item.id}
                       href={item.href}
                       onClick={() => onClose?.()}
-                      className={`group flex items-center justify-between px-3 py-2 rounded-2xl text-[13px] font-medium transition-all duration-150 ${
+                      className={`group flex items-center justify-between px-3 h-10 rounded-2xl text-[13px] font-medium transition-all duration-150 ${
                         active
-                          ? "bg-[#f3e7dc] text-[#331c12] font-bold shadow-xs"
-                          : "text-[#3f2a1e] hover:bg-[#f3ece6] hover:text-[#1e1009]"
+                          ? "bg-blue-50 text-[#0260de] font-bold shadow-xs border border-blue-100"
+                          : "text-slate-600 hover:bg-slate-50 hover:text-[#0f172a]"
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <span className={active ? "text-[#4a2c1d]" : "text-[#73523f] group-hover:text-[#4a2c1d]"}>
+                        <span className={active ? "text-[#0260de]" : "text-slate-400 group-hover:text-[#0260de]"}>
                           {item.icon}
                         </span>
                         <span className="truncate">{item.name}</span>
                       </div>
 
                       {!active && (
-                        <span className="text-[#a89080] group-hover:text-[#6b4731] transition-transform group-hover:translate-x-0.5">
+                        <span className="text-slate-300 group-hover:text-slate-500 transition-transform group-hover:translate-x-0.5">
                           {navIcons.chevronRight}
                         </span>
                       )}
@@ -310,7 +324,7 @@ export default function Sidebar({
 
       {/* Footer system status */}
       <div className="pt-4 px-2">
-        <div className="flex items-center justify-between text-[11px] text-[#997d6c]">
+        <div className="h-10 flex items-center justify-between text-[11px] text-slate-400">
           <span className="flex items-center gap-1.5 font-medium">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             System Online
@@ -324,25 +338,30 @@ export default function Sidebar({
   return (
     <>
       {/* ================================================================== */}
-      {/* A. MOBILE DOCKED VERTICAL RAIL (Always visible on mobile!)          */}
+      {/* A. MOBILE SLIDE-OUT NAVIGATION DRAWER (Only opens via Hamburger)  */}
       {/* ================================================================== */}
-      <div className="lg:hidden flex flex-col p-2 h-screen flex-shrink-0 z-30">
-        <div className="h-full rounded-[26px] overflow-hidden border border-[#e8dfd8] shadow-md shadow-stone-900/10">
-          {verticalIconRail}
-        </div>
-      </div>
-
-      {/* Mobile Slide-out Full Drawer (Opens when user wants full text menu) */}
       {isMobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           {/* Backdrop */}
           <div
             className="fixed inset-0 bg-stone-900/60 backdrop-blur-xs transition-opacity duration-300 animate-in fade-in"
             onClick={onClose}
+            aria-hidden="true"
           />
           {/* Drawer combining vertical rail + expanded panel */}
-          <div className="fixed inset-y-0 left-0 w-80 max-w-[85vw] p-3 flex flex-col font-sans z-50 animate-in slide-in-from-left duration-200">
-            <div className="flex h-full w-full select-none overflow-hidden rounded-[26px] border border-[#e8dfd8] bg-white shadow-2xl">
+          <div className="fixed inset-y-0 left-0 w-80 max-w-[88vw] p-2.5 sm:p-3 flex flex-col font-sans z-50 animate-in slide-in-from-left duration-250">
+            <div className="flex h-full w-full select-none overflow-hidden rounded-[26px] border border-[#e2e8f0] bg-white shadow-2xl relative">
+              {/* Mobile Close Button */}
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close navigation"
+                className="absolute top-3 right-3 z-30 p-1.5 rounded-xl bg-white/90 hover:bg-slate-100 text-slate-600 transition-colors cursor-pointer border border-[#e2e8f0]"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
               {verticalIconRail}
               {expandedMenuPanel}
             </div>
@@ -358,11 +377,11 @@ export default function Sidebar({
           isCollapsed ? "w-[88px]" : "w-72 xl:w-80"
         }`}
       >
-        <div className="flex h-full w-full select-none overflow-hidden rounded-[26px] border border-[#e8dfd8] bg-white shadow-xl shadow-stone-900/5">
-          {/* Always visible: Vertical Mahogany Rail */}
+        <div className="flex h-full w-full select-none overflow-hidden rounded-[26px] border border-[#e2e8f0] bg-white shadow-xl shadow-slate-900/5">
+          {/* Always visible: Vertical Midnight Rail */}
           {verticalIconRail}
 
-          {/* Conditionally visible: Expanded Right Cream Menu Panel */}
+          {/* Conditionally visible: Expanded Right Pure White Menu Panel */}
           {!isCollapsed && expandedMenuPanel}
         </div>
       </aside>
