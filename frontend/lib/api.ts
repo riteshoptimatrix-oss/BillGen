@@ -5,9 +5,19 @@
  * on the mobile device itself.
  */
 export function getApiUrl(): string {
+  // If NEXT_PUBLIC_API_URL is configured (e.g. deployed to Netlify), use it
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    const envUrl = process.env.NEXT_PUBLIC_API_URL.trim();
+    if (!envUrl.includes("localhost") && !envUrl.includes("127.0.0.1")) {
+      return envUrl;
+    }
+  }
+
+  // Fallback for local LAN / mobile testing during local development
   if (typeof window !== "undefined") {
     const { hostname } = window.location;
-    if (hostname && hostname !== "localhost" && hostname !== "127.0.0.1") {
+    const isPrivateIp = /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(hostname);
+    if (isPrivateIp) {
       return `http://${hostname}:8000/api`;
     }
   }
@@ -21,7 +31,8 @@ export function formatImageUrl(url?: string): string {
   if (!url) return "";
   if (typeof window !== "undefined") {
     const { hostname } = window.location;
-    if (hostname && hostname !== "localhost" && hostname !== "127.0.0.1") {
+    const isPrivateIp = /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(hostname);
+    if (isPrivateIp) {
       return url.replace("://localhost:", `://${hostname}:`).replace("://127.0.0.1:", `://${hostname}:`);
     }
   }
