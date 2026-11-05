@@ -213,11 +213,13 @@ export default function BillInvoicePage() {
     setIsSendingWhatsApp(true);
     showToast("Generating Invoice PDF & preparing WhatsApp share...");
 
+    const hadViewInvoiceOpen = !!viewInvoice;
+
     try {
       const filename = `Invoice-${whatsappInvoice.invoice_number || "SiddhiVinayak"}.pdf`;
 
       // 1. Temporarily mount printable target if not already visible
-      if (!viewInvoice) {
+      if (!hadViewInvoiceOpen) {
         setViewInvoice(whatsappInvoice);
         await new Promise((resolve) => setTimeout(resolve, 350));
       }
@@ -304,6 +306,9 @@ export default function BillInvoicePage() {
       console.error("WhatsApp share error:", err);
       showToast("Could not complete WhatsApp send. Please try again.");
     } finally {
+      if (!hadViewInvoiceOpen) {
+        setViewInvoice(null);
+      }
       setIsSendingWhatsApp(false);
     }
   };
