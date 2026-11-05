@@ -1,13 +1,41 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Image from "next/image";
+import { useState, useEffect, useMemo } from "react";
+import { getApiUrl } from "@/lib/api";
+import {
+  Users,
+  Search,
+  Plus,
+  Trash2,
+  Save,
+  X,
+  Phone,
+  Mail,
+  Building,
+  MapPin,
+  Landmark,
+  ShieldCheck,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  CreditCard
+} from "lucide-react";
 
 interface Customer {
   _id: string;
   name: string;
   mobile_number: string;
+  email?: string;
+  gst_number?: string;
   delivery_address?: string;
+  billing_address?: string;
+  bank_name?: string;
+  account_holder_name?: string;
+  account_number?: string;
+  ifsc_code?: string;
+  branch_name?: string;
+  account_type?: string;
 }
 
 type ViewState = "empty" | "create" | "edit";
@@ -17,24 +45,41 @@ export default function CustomersPage() {
   const [activeView, setActiveView] = useState<ViewState>("empty");
   const [activeCustomerId, setActiveCustomerId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedFilter, setSelectedFilter] = useState<"all" | "gst">("all");
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [showAdditional, setShowAdditional] = useState(true);
 
   const [formData, setFormData] = useState({
     name: "",
     mobile_number: "",
+    email: "",
+    gst_number: "",
     delivery_address: "",
+    billing_address: "",
+    bank_name: "",
+    account_holder_name: "",
+    account_number: "",
+    ifsc_code: "",
+    branch_name: "",
+    account_type: "Current Account",
   });
 
   const fetchCustomers = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+      const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/customers/`);
       if (res.ok) {
         const data = await res.json();
         setCustomers(data);
+        if (data.length > 0 && activeView === "empty") {
+          // Select the first customer automatically on desktop
+          setActiveView("edit");
+          setActiveCustomerId(data[0]._id);
+          populateForm(data[0]);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch customers:", error);
@@ -47,49 +92,69 @@ export default function CustomersPage() {
     fetchCustomers();
   }, []);
 
-  useEffect(() => {
-    if (activeView === "edit" && activeCustomerId) {
-      const original = customers.find((c) => c._id === activeCustomerId);
-      if (original) {
-        const isChanged =
-          original.name !== formData.name ||
-          original.mobile_number !== formData.mobile_number ||
-          (original.delivery_address || "") !== formData.delivery_address;
-        setHasChanges(isChanged);
-      }
-    }
-  }, [formData, activeView, activeCustomerId, customers]);
+  const populateForm = (customer: Customer) => {
+    setFormData({
+      name: customer.name || "",
+      mobile_number: customer.mobile_number || "",
+      email: customer.email || "",
+      gst_number: customer.gst_number || "",
+      delivery_address: customer.delivery_address || "",
+      billing_address: customer.billing_address || "",
+      bank_name: customer.bank_name || "",
+      account_holder_name: customer.account_holder_name || "",
+      account_number: customer.account_number || "",
+      ifsc_code: customer.ifsc_code || "",
+      branch_name: customer.branch_name || "",
+      account_type: customer.account_type || "Current Account",
+    });
+    setHasChanges(false);
+  };
 
   const handleCreateNewClick = () => {
     setActiveView("create");
     setActiveCustomerId(null);
-    setFormData({ name: "", mobile_number: "", delivery_address: "" });
+    setFormData({
+      name: "",
+      mobile_number: "",
+      email: "",
+      gst_number: "",
+      delivery_address: "",
+      billing_address: "",
+      bank_name: "",
+      account_holder_name: "",
+      account_number: "",
+      ifsc_code: "",
+      branch_name: "",
+      account_type: "Current Account",
+    });
     setHasChanges(true);
   };
 
   const handleCustomerClick = (customer: Customer) => {
     setActiveView("edit");
     setActiveCustomerId(customer._id);
-    setFormData({
-      name: customer.name,
-      mobile_number: customer.mobile_number,
-      delivery_address: customer.delivery_address || "",
-    });
-    setHasChanges(false);
+    populateForm(customer);
   };
 
   const handleDeleteCustomer = async () => {
     if (!activeCustomerId) return;
     if (confirm("Are you sure you want to delete this customer?")) {
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+        const apiUrl = getApiUrl();
         const res = await fetch(`${apiUrl}/customers/${activeCustomerId}`, {
           method: "DELETE",
         });
         if (res.ok) {
-          setActiveView("empty");
-          setActiveCustomerId(null);
-          await fetchCustomers();
+          const updated = customers.filter((c) => c._id !== activeCustomerId);
+          setCustomers(updated);
+          if (updated.length > 0) {
+            setActiveCustomerId(updated[0]._id);
+            populateForm(updated[0]);
+            setActiveView("edit");
+          } else {
+            setActiveView("empty");
+            setActiveCustomerId(null);
+          }
         } else {
           alert("Failed to delete customer.");
         }
@@ -100,15 +165,18 @@ export default function CustomersPage() {
   };
 
   const handleSave = async () => {
-    if (!formData.name || !formData.mobile_number) {
-      alert("Name and Mobile Number are required!");
+    if (!formData.name.trim() || !formData.mobile_number.trim()) {
+      alert("Customer Name and Mobile Number are required!");
       return;
     }
 
     setIsSaving(true);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
-      const endpoint = activeView === "create" ? `${apiUrl}/customers/` : `${apiUrl}/customers/${activeCustomerId}`;
+      const apiUrl = getApiUrl();
+      const endpoint =
+        activeView === "create"
+          ? `${apiUrl}/customers/`
+          : `${apiUrl}/customers/${activeCustomerId}`;
       const method = activeView === "create" ? "POST" : "PUT";
 
       const res = await fetch(endpoint, {
@@ -118,14 +186,14 @@ export default function CustomersPage() {
       });
 
       if (res.ok) {
-        await fetchCustomers();
+        const savedCustomer = await res.json();
         setHasChanges(false);
-        if (activeView === "create") {
-          const newCustomer = await res.json();
-          handleCustomerClick(newCustomer);
-        }
+        await fetchCustomers();
+        setActiveView("edit");
+        setActiveCustomerId(savedCustomer._id || savedCustomer.id || activeCustomerId);
       } else {
-        alert("Failed to save customer");
+        const err = await res.json();
+        alert(err.detail || "Failed to save customer");
       }
     } catch (error) {
       console.error("Save error:", error);
@@ -135,235 +203,465 @@ export default function CustomersPage() {
     }
   };
 
-  const filteredCustomers = customers.filter(c => 
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    c.mobile_number.includes(searchQuery)
-  );
+  const filteredCustomers = useMemo(() => {
+    return customers.filter((c) => {
+      const matchSearch =
+        c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.mobile_number.includes(searchQuery) ||
+        (c.gst_number && c.gst_number.toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchFilter = selectedFilter === "gst" ? !!c.gst_number : true;
+      return matchSearch && matchFilter;
+    });
+  }, [customers, searchQuery, selectedFilter]);
+
+  const activeCustomer = customers.find((c) => c._id === activeCustomerId);
 
   return (
-    <div className="flex h-[calc(100vh-5rem)] md:h-[calc(100vh-6rem)] bg-[#fdfdfc] rounded-2xl md:rounded-3xl overflow-hidden shadow-xs border border-gray-100">
-      
-      {/* LEFT PANE - MASTER LIST (Shown on mobile when no customer selected) */}
-      <div className={`w-full md:w-1/3 md:min-w-[320px] md:max-w-[400px] border-r border-gray-100 bg-white flex flex-col z-10 ${
-        activeView !== "empty" ? "hidden md:flex" : "flex"
-      }`}>
-        
-        {/* Header & Search */}
-        <div className="p-4 sm:p-6 pb-4 border-b border-gray-50">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h1 className="text-2xl font-black text-gray-900 tracking-tight">Customers</h1>
-              <p className="text-sm font-medium text-gray-400 mt-1">{customers.length} total customers</p>
+    <div className="space-y-6 pb-12 font-sans">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-[#5c341f] text-white flex items-center justify-center shadow-xs">
+              <Users className="w-4 h-4" />
             </div>
+            <h1 className="text-2xl font-black text-[#23160e] tracking-tight">Customers</h1>
+          </div>
+          <p className="text-xs text-[#8a7566] mt-1">
+            Manage your verified dealer network, GSTIN registrations, and delivery destinations.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleCreateNewClick}
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#5c341f] hover:bg-[#472716] text-white text-xs font-semibold rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
+          >
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+            <span>Add Customer</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main Split-Pane Workspace */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left Master List (4 Cols) */}
+        <div className="lg:col-span-5 bg-white rounded-3xl p-5 border border-[#ede5dd] shadow-xs flex flex-col">
+          {/* Filter Pills */}
+          <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
             <button
-              onClick={handleCreateNewClick}
-              className="w-10 h-10 rounded-full bg-[#c51f2a] text-white flex items-center justify-center hover:bg-[#a51a23] shadow-md shadow-red-200 transition-all hover:scale-105 active:scale-95"
+              onClick={() => setSelectedFilter("all")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                selectedFilter === "all"
+                  ? "bg-[#5c341f] text-white shadow-xs"
+                  : "bg-[#faf7f4] text-[#8a7566] hover:bg-[#ede5dd]/60"
+              }`}
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-              </svg>
+              All Clients ({customers.length})
+            </button>
+            <button
+              onClick={() => setSelectedFilter("gst")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                selectedFilter === "gst"
+                  ? "bg-[#5c341f] text-white shadow-xs"
+                  : "bg-[#faf7f4] text-[#8a7566] hover:bg-[#ede5dd]/60"
+              }`}
+            >
+              Registered GSTIN ({customers.filter((c) => !!c.gst_number).length})
             </button>
           </div>
 
-          <div className="relative group">
-            <svg className="w-5 h-5 absolute left-3.5 top-3 text-gray-400 group-focus-within:text-[#c51f2a] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+          {/* Search Box */}
+          <div className="relative mb-4">
+            <Search className="w-4 h-4 text-[#8a7566] absolute left-3.5 top-3" />
             <input
               type="text"
-              placeholder="Search customers..."
+              placeholder="Search customers, mobile, GST..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-gray-50/50 border border-gray-200 rounded-xl pl-11 pr-4 py-2.5 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#c51f2a]/20 focus:border-[#c51f2a] transition-all"
+              className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl pl-10 pr-4 py-2.5 text-xs font-medium text-[#23160e] placeholder-[#8a7566] focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f] transition-all"
             />
           </div>
+
+          {/* Customer Cards List */}
+          <div className="space-y-2 max-h-[620px] overflow-y-auto pr-1">
+            {isLoading ? (
+              <div className="py-12 text-center text-[#8a7566] text-xs">
+                <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-[#5c341f] mb-2"></div>
+                <p>Loading customers...</p>
+              </div>
+            ) : filteredCustomers.length === 0 ? (
+              <div className="py-12 text-center text-[#8a7566] text-xs font-medium">
+                No customer records found.
+              </div>
+            ) : (
+              filteredCustomers.map((customer) => {
+                const isSelected = activeCustomerId === customer._id && activeView === "edit";
+                const initials = customer.name
+                  .split(" ")
+                  .map((n) => n[0])
+                  .slice(0, 2)
+                  .join("")
+                  .toUpperCase();
+
+                return (
+                  <div
+                    key={customer._id}
+                    onClick={() => handleCustomerClick(customer)}
+                    className={`p-3.5 rounded-2xl cursor-pointer transition-all flex items-center justify-between border ${
+                      isSelected
+                        ? "bg-[#5c341f] text-white border-[#5c341f] shadow-xs"
+                        : "bg-[#faf7f4] hover:bg-[#f4ede6] border-[#ede5dd] text-[#23160e]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                          isSelected
+                            ? "bg-white/20 text-white"
+                            : "bg-[#5c341f]/10 text-[#5c341f]"
+                        }`}
+                      >
+                        {initials || "SV"}
+                      </div>
+                      <div className="min-w-0">
+                        <h4
+                          className={`text-xs font-bold truncate ${
+                            isSelected ? "text-white" : "text-[#23160e]"
+                          }`}
+                        >
+                          {customer.name}
+                        </h4>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span
+                            className={`text-[11px] font-medium truncate ${
+                              isSelected ? "text-white/80" : "text-[#8a7566]"
+                            }`}
+                          >
+                            {customer.mobile_number}
+                          </span>
+                          {customer.gst_number && (
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                isSelected
+                                  ? "bg-white/20 text-white"
+                                  : "bg-[#5c341f]/10 text-[#5c341f]"
+                              }`}
+                            >
+                              GSTIN
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <ChevronRight
+                      className={`w-4 h-4 shrink-0 transition-transform ${
+                        isSelected ? "text-white translate-x-0.5" : "text-[#8a7566]"
+                      }`}
+                    />
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
 
-        {/* List */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-1 custom-scrollbar">
-          {isLoading ? (
-            <div className="flex justify-center p-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#c51f2a]"></div>
-            </div>
-          ) : filteredCustomers.length === 0 ? (
-            <div className="text-center p-8 text-gray-400 text-sm font-medium">
-              No customers found.
+        {/* Right Detail / Edit Workspace (7 Cols) */}
+        <div className="lg:col-span-7 bg-white rounded-3xl p-6 border border-[#ede5dd] shadow-xs">
+          {activeView === "empty" ? (
+            <div className="py-24 text-center text-[#8a7566]">
+              <div className="w-16 h-16 rounded-2xl bg-[#faf7f4] border border-[#ede5dd] flex items-center justify-center mx-auto mb-3 text-[#5c341f]">
+                <Users className="w-7 h-7" />
+              </div>
+              <h3 className="text-sm font-bold text-[#23160e]">No Customer Selected</h3>
+              <p className="text-xs text-[#8a7566] mt-1 max-w-sm mx-auto">
+                Select a client from the directory on the left or add a new customer profile.
+              </p>
+              <button
+                onClick={handleCreateNewClick}
+                className="mt-4 px-4 py-2 bg-[#5c341f] text-white text-xs font-semibold rounded-xl shadow-xs hover:bg-[#472716]"
+              >
+                + Create New Customer
+              </button>
             </div>
           ) : (
-            filteredCustomers.map((customer) => (
-              <div
-                key={customer._id}
-                onClick={() => handleCustomerClick(customer)}
-                className={`flex items-center p-3 rounded-xl cursor-pointer transition-all duration-200 ${
-                  activeCustomerId === customer._id
-                    ? "bg-red-50 shadow-sm border border-red-100"
-                    : "hover:bg-gray-50 border border-transparent"
-                }`}
-              >
-                <div className="w-12 h-12 rounded-full bg-blue-100 border border-blue-200 overflow-hidden flex-shrink-0 mr-4 flex items-center justify-center">
-                  <span className="text-blue-600 font-bold text-lg">{customer.name.charAt(0).toUpperCase()}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className={`text-sm font-bold truncate ${activeCustomerId === customer._id ? "text-[#c51f2a]" : "text-gray-900"}`}>
-                    {customer.name}
+            <div className="space-y-6">
+              {/* Workspace Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-[#ede5dd]">
+                <div>
+                  <h3 className="text-base font-black text-[#23160e]">
+                    {activeView === "create" ? "Add New Customer" : "Customer Profile"}
                   </h3>
-                  <p className="text-xs font-semibold text-gray-500 truncate mt-0.5">
-                    {customer.mobile_number}
+                  <p className="text-xs text-[#8a7566] mt-0.5">
+                    {activeView === "create"
+                      ? "Enter client identity, contact information, and GST details."
+                      : "Review and update client parameters, billing address, and bank accounts."}
                   </p>
                 </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
 
-      {/* RIGHT PANE - DETAIL WORKSPACE */}
-      <div className={`flex-1 bg-[#fdfdfc] relative flex flex-col ${
-        activeView === "empty" ? "hidden md:flex" : "flex"
-      }`}>
-        {activeView === "empty" ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-6 text-center">
-            <div className="w-20 h-20 rounded-full bg-gray-50 flex items-center justify-center mb-4 border border-gray-100">
-              <svg className="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-            </div>
-            <p className="text-base font-bold text-gray-600">No Customer Selected</p>
-            <p className="text-xs text-gray-400 mt-1">Select a customer from the list or create a new profile.</p>
-          </div>
-        ) : (
-          <div className="flex-1 flex flex-col h-full overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
-            
-            {/* Toolbar */}
-            <div className="h-14 sm:h-16 border-b border-gray-100 bg-white flex items-center justify-between px-4 sm:px-8 flex-shrink-0">
-              <div className="flex items-center">
-                <button
-                  type="button"
-                  onClick={() => setActiveView("empty")}
-                  className="md:hidden mr-2 p-1.5 -ml-1 text-gray-500 hover:text-gray-900 rounded-lg hover:bg-gray-100 flex items-center gap-1 text-xs font-bold"
-                  title="Back to list"
-                >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                  <span>List</span>
-                </button>
-
-                <h2 className="text-base sm:text-lg font-bold text-gray-800">
-                  {activeView === "create" ? "New Customer" : "Edit Customer"}
-                </h2>
+                <div className="flex items-center gap-2">
+                  {activeView === "edit" && activeCustomerId && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteCustomer}
+                      className="p-2 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl transition-colors cursor-pointer"
+                      title="Delete Customer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      if (activeView === "create") {
+                        if (customers.length > 0) {
+                          setActiveView("edit");
+                          setActiveCustomerId(customers[0]._id);
+                          populateForm(customers[0]);
+                        } else {
+                          setActiveView("empty");
+                        }
+                      } else {
+                        if (activeCustomer) populateForm(activeCustomer);
+                      }
+                    }}
+                    className="px-3.5 py-2 text-xs font-semibold text-[#8a7566] hover:bg-[#faf7f4] border border-[#ede5dd] rounded-xl transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="flex items-center gap-1.5 px-5 py-2 bg-[#5c341f] hover:bg-[#472716] text-white text-xs font-semibold rounded-xl shadow-xs transition-all active:scale-95 disabled:opacity-70 cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{isSaving ? "Saving..." : "Save Changes"}</span>
+                  </button>
+                </div>
               </div>
 
-              {activeView === "edit" && activeCustomerId && (
-                <button
-                  type="button"
-                  onClick={handleDeleteCustomer}
-                  className="px-3.5 py-1.5 text-xs font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded-xl transition-colors flex items-center gap-1.5 active:scale-95 cursor-pointer"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                  Delete Customer
-                </button>
-              )}
-            </div>
-
-            {/* Scrollable Form Area */}
-            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-              <div className="max-w-2xl mx-auto space-y-8 pb-24">
-                
-                <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm space-y-6">
-                  
-                  <div className="flex flex-col sm:flex-row gap-6">
-                    {/* Name Input */}
-                    <div className="flex-[2]">
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Customer Name</label>
-                      <input
-                        type="text"
-                        required
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-[#c51f2a]/20 focus:border-[#c51f2a] outline-none transition-all placeholder:font-normal placeholder:text-gray-400"
-                        placeholder="John Doe"
-                      />
-                    </div>
-                    
-                    {/* Mobile Input */}
-                    <div className="flex-1">
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Mobile Number</label>
-                      <input
-                        type="text"
-                        required
-                        value={formData.mobile_number}
-                        onChange={(e) => setFormData({ ...formData, mobile_number: e.target.value })}
-                        className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 font-bold focus:ring-2 focus:ring-[#c51f2a]/20 focus:border-[#c51f2a] outline-none transition-all placeholder:font-normal placeholder:text-gray-400"
-                        placeholder="+91 00000 00000"
-                      />
-                    </div>
-                  </div>
-
-                  <hr className="border-gray-100" />
-
-                  {/* Delivery Address */}
+              {/* Form Body */}
+              <div className="space-y-5">
+                {/* Primary Identifiers */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Delivery Address</label>
-                    <textarea
-                      rows={4}
-                      value={formData.delivery_address}
-                      onChange={(e) => setFormData({ ...formData, delivery_address: e.target.value })}
-                      className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-gray-700 focus:ring-2 focus:ring-[#c51f2a]/20 focus:border-[#c51f2a] outline-none resize-none transition-all placeholder:text-gray-400"
-                      placeholder="Full delivery address for shipping..."
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                      Client / Company Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => {
+                        setFormData({ ...formData, name: e.target.value });
+                        setHasChanges(true);
+                      }}
+                      placeholder="e.g. Gujarat Auto Spares & Body Works"
+                      className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#23160e] placeholder-[#8a7566] focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f] transition-all"
                     />
                   </div>
 
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                      Mobile Number *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.mobile_number}
+                      onChange={(e) => {
+                        setFormData({ ...formData, mobile_number: e.target.value });
+                        setHasChanges(true);
+                      }}
+                      placeholder="+91 98250 14829"
+                      className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3.5 py-2.5 text-xs font-bold text-[#23160e] placeholder-[#8a7566] focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f] transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                      Email Address
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => {
+                        setFormData({ ...formData, email: e.target.value });
+                        setHasChanges(true);
+                      }}
+                      placeholder="client@automotive.com"
+                      className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3.5 py-2.5 text-xs font-medium text-[#23160e] placeholder-[#8a7566] focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f] transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                      GSTIN Number (15 Digits)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.gst_number}
+                      onChange={(e) => {
+                        setFormData({ ...formData, gst_number: e.target.value.toUpperCase() });
+                        setHasChanges(true);
+                      }}
+                      placeholder="24AAAFO1234F1Z9"
+                      className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-[#23160e] placeholder-[#8a7566] focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f] transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Addresses */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                      Delivery / Factory Address
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={formData.delivery_address}
+                      onChange={(e) => {
+                        setFormData({ ...formData, delivery_address: e.target.value });
+                        setHasChanges(true);
+                      }}
+                      placeholder="Plot 42, GIDC Industrial Estate, Odhav, Ahmedabad, Gujarat 382415"
+                      className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3.5 py-2 text-xs font-medium text-[#23160e] placeholder-[#8a7566] focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f] transition-all resize-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                      Billing Address (if different)
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={formData.billing_address}
+                      onChange={(e) => {
+                        setFormData({ ...formData, billing_address: e.target.value });
+                        setHasChanges(true);
+                      }}
+                      placeholder="Corporate Head Office, C.G. Road, Ahmedabad, Gujarat"
+                      className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3.5 py-2 text-xs font-medium text-[#23160e] placeholder-[#8a7566] focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f] transition-all resize-none"
+                    />
+                  </div>
+                </div>
+
+                {/* 4 Stat Badges matching the Product page design */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                  <div className="bg-[#faf7f4] border border-[#ede5dd] rounded-2xl p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#8a7566]">Status</p>
+                    <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#eaf8ea] text-[#1e822d] border border-[#c4eec4]">
+                      Active Client
+                    </span>
+                  </div>
+
+                  <div className="bg-[#faf7f4] border border-[#ede5dd] rounded-2xl p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#8a7566]">Tax Regime</p>
+                    <p className="text-xs font-bold text-[#23160e] mt-1">
+                      {formData.gst_number ? "Regular GSTIN" : "Unregistered"}
+                    </p>
+                  </div>
+
+                  <div className="bg-[#faf7f4] border border-[#ede5dd] rounded-2xl p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#8a7566]">State Code</p>
+                    <p className="text-xs font-bold text-[#23160e] mt-1">24 - Gujarat</p>
+                  </div>
+
+                  <div className="bg-[#faf7f4] border border-[#ede5dd] rounded-2xl p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#8a7566]">Payment Term</p>
+                    <p className="text-xs font-bold text-[#23160e] mt-1">15 Days Net</p>
+                  </div>
+                </div>
+
+                {/* Collapsible Bank & Remittance Section */}
+                <div className="border border-[#ede5dd] rounded-2xl overflow-hidden bg-[#faf7f4]">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdditional(!showAdditional)}
+                    className="w-full px-4 py-3 flex items-center justify-between text-left font-bold text-xs text-[#23160e] hover:bg-[#f4ede6] transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Landmark className="w-4 h-4 text-[#5c341f]" />
+                      <span>Bank &amp; Remittance Details</span>
+                    </div>
+                    {showAdditional ? (
+                      <ChevronUp className="w-4 h-4 text-[#8a7566]" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-[#8a7566]" />
+                    )}
+                  </button>
+
+                  {showAdditional && (
+                    <div className="p-4 pt-1 bg-white border-t border-[#ede5dd] grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-[#8a7566] mb-1">
+                          Bank Name
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.bank_name}
+                          onChange={(e) => {
+                            setFormData({ ...formData, bank_name: e.target.value });
+                            setHasChanges(true);
+                          }}
+                          placeholder="Bank of Baroda"
+                          className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3 py-2 text-xs font-medium text-[#23160e] focus:outline-none focus:ring-1 focus:ring-[#5c341f]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-[#8a7566] mb-1">
+                          Account Holder Name
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.account_holder_name}
+                          onChange={(e) => {
+                            setFormData({ ...formData, account_holder_name: e.target.value });
+                            setHasChanges(true);
+                          }}
+                          placeholder="Gujarat Auto Spares"
+                          className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3 py-2 text-xs font-medium text-[#23160e] focus:outline-none focus:ring-1 focus:ring-[#5c341f]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-[#8a7566] mb-1">
+                          Account Number
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.account_number}
+                          onChange={(e) => {
+                            setFormData({ ...formData, account_number: e.target.value });
+                            setHasChanges(true);
+                          }}
+                          placeholder="01420200001234"
+                          className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3 py-2 text-xs font-mono font-medium text-[#23160e] focus:outline-none focus:ring-1 focus:ring-[#5c341f]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-[#8a7566] mb-1">
+                          IFSC Code
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.ifsc_code}
+                          onChange={(e) => {
+                            setFormData({ ...formData, ifsc_code: e.target.value.toUpperCase() });
+                            setHasChanges(true);
+                          }}
+                          placeholder="BARB0ODHAVA"
+                          className="w-full bg-[#faf7f4] border border-[#ede5dd] rounded-xl px-3 py-2 text-xs font-mono font-medium text-[#23160e] focus:outline-none focus:ring-1 focus:ring-[#5c341f]"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
-
-            {/* Sticky Action Bar */}
-            <div className={`absolute bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-gray-100 flex justify-end gap-3 transition-transform duration-300 ${hasChanges ? 'translate-y-0' : 'translate-y-full'}`}>
-              <button
-                onClick={() => {
-                  if (activeView === "create") {
-                    setActiveView("empty");
-                  } else {
-                    const original = customers.find(c => c._id === activeCustomerId);
-                    if (original) handleCustomerClick(original);
-                  }
-                }}
-                className="px-6 py-2.5 rounded-xl font-bold text-gray-600 hover:bg-gray-100 transition-colors"
-              >
-                Discard
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="px-8 py-2.5 rounded-xl font-bold text-white bg-[#c51f2a] hover:bg-[#a51a23] shadow-md shadow-red-200 transition-all active:scale-95 disabled:opacity-70 flex items-center"
-              >
-                {isSaving ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Saving...
-                  </>
-                ) : (
-                  "Save Changes"
-                )}
-              </button>
-            </div>
-
-          </div>
-        )}
+          )}
+        </div>
       </div>
-
-      <style dangerouslySetInnerHTML={{__html: `
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #e5e7eb; border-radius: 20px; }
-        .custom-scrollbar:hover::-webkit-scrollbar-thumb { background-color: #d1d5db; }
-      `}} />
     </div>
   );
 }

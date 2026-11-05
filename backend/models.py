@@ -11,6 +11,10 @@ class ProductBase(BaseModel):
     image: Optional[str] = None
     price: float = 0.0
     stock: int = 0
+    category: Optional[str] = "Chassis & Frame"
+    unit: Optional[str] = "Piece (Pcs)"
+    hsn_code: Optional[str] = "HSN8708"
+    tax_rate: Optional[float] = 18.0
 
 class ProductCreate(ProductBase):
     pass
@@ -21,6 +25,10 @@ class ProductUpdate(BaseModel):
     image: Optional[str] = None
     price: Optional[float] = None
     stock: Optional[int] = None
+    category: Optional[str] = None
+    unit: Optional[str] = None
+    hsn_code: Optional[str] = None
+    tax_rate: Optional[float] = None
 
 class Product(ProductBase):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
@@ -37,6 +45,10 @@ class LabourBase(BaseModel):
     image: Optional[str] = None
     aadhar_image: Optional[str] = None
     salary: float = 0.0
+    labour_id: Optional[str] = None
+    status: Optional[str] = "Active"
+    work_type: Optional[str] = "Full Time"
+    joining_date: Optional[str] = None
 
 class LabourCreate(LabourBase):
     pass
@@ -48,6 +60,10 @@ class LabourUpdate(BaseModel):
     image: Optional[str] = None
     aadhar_image: Optional[str] = None
     salary: Optional[float] = None
+    labour_id: Optional[str] = None
+    status: Optional[str] = None
+    work_type: Optional[str] = None
+    joining_date: Optional[str] = None
 
 class Labour(LabourBase):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)

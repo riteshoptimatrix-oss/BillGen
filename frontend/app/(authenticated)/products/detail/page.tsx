@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { getApiUrl, formatImageUrl } from "@/lib/api";
 
 interface Product {
   _id: string;
@@ -14,8 +15,8 @@ interface Product {
 }
 
 export default function ProductDetailPage() {
-  const { pid } = useParams();
   const router = useRouter();
+  const [pid, setPid] = useState<string | null>(null);
   
   const [product, setProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,7 +33,7 @@ export default function ProductDetailPage() {
 
   const fetchProduct = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+      const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/products/${pid}`);
       if (res.ok) {
         const data = await res.json();
@@ -53,6 +54,15 @@ export default function ProductDetailPage() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("pid");
+    if (!id) {
+      router.push("/products");
+      return;
+    }
+    setPid(id);
+  }, [router]);
 
   useEffect(() => {
     if (pid) {
@@ -80,7 +90,7 @@ export default function ProductDetailPage() {
     const formDataUpload = new FormData();
     formDataUpload.append("file", file);
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+    const apiUrl = getApiUrl();
     try {
       const res = await fetch(`${apiUrl}/products/upload`, {
         method: "POST",
@@ -97,7 +107,7 @@ export default function ProductDetailPage() {
 
   const handleSave = async () => {
     setIsSaving(true);
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+    const apiUrl = getApiUrl();
     try {
       const res = await fetch(`${apiUrl}/products/${pid}`, {
         method: "PUT",
@@ -174,7 +184,7 @@ export default function ProductDetailPage() {
         <div className="md:w-2/5 p-8 lg:p-12 flex items-center justify-center border-b md:border-b-0 md:border-r border-gray-100/50 bg-gradient-to-br from-gray-50/50 to-white/30">
           <div className="w-full max-w-sm aspect-square rounded-[2rem] bg-white shadow-xl shadow-gray-200/40 border border-white overflow-hidden flex items-center justify-center relative group">
             {formData.image ? (
-              <img src={formData.image} alt={formData.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+              <img src={formatImageUrl(formData.image)} alt={formData.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
             ) : (
               <svg className="w-24 h-24 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />

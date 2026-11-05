@@ -1,6 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import {
+  Building2,
+  FileSpreadsheet,
+  Receipt,
+  Landmark,
+  ShieldCheck,
+  Save,
+  Check,
+  CheckCircle2,
+  Sliders,
+  Sparkles
+} from "lucide-react";
 
 type SettingsTab = "company" | "invoice" | "tax" | "bank" | "security";
 
@@ -21,7 +33,7 @@ export default function SettingsPage() {
     stateCode: "24",
     gstin: "24AAAFO1234F1Z9",
     pan: "AAAFO1234F",
-    cin: "U34102GJ2015PTC082910"
+    cin: "U34102GJ2015PTC082910",
   });
 
   // 2. Invoice & Billing Defaults
@@ -30,9 +42,10 @@ export default function SettingsPage() {
     nextNumber: 6,
     defaultTerms: "15 Days",
     defaultPaymentMethod: "Bank Transfer",
-    notes: "1. Goods once sold will not be returned without warranty inspection.\n2. Interest @ 18% p.a. charged after due date.\n3. All disputes subject to Ahmedabad jurisdiction only.",
+    notes:
+      "1. Goods once sold will not be returned without warranty inspection.\n2. Interest @ 18% p.a. charged after due date.\n3. All disputes subject to Ahmedabad jurisdiction only.",
     autoDecrementStock: true,
-    showProductImageOnBill: true
+    showProductImageOnBill: true,
   });
 
   // 3. Tax & GST Configuration
@@ -42,7 +55,7 @@ export default function SettingsPage() {
     enableCgstSgstSplit: true,
     hsnSummaryEnabled: true,
     reverseChargeApplicable: false,
-    eInvoiceThreshold: 5000000
+    eInvoiceThreshold: 5000000,
   });
 
   // 4. Default Remittance Bank Details
@@ -53,7 +66,7 @@ export default function SettingsPage() {
     ifscCode: "BARB0ODHAVA",
     branchName: "Odhav Industrial Estate Branch",
     accountType: "Current Account",
-    upiId: "siddhivinayak@barodampay"
+    upiId: "siddhivinayak@barodampay",
   });
 
   // 5. User Account & Security
@@ -63,7 +76,7 @@ export default function SettingsPage() {
     newPassword: "",
     confirmPassword: "",
     sessionTimeout: "8 Hours",
-    twoFactorEnabled: false
+    twoFactorEnabled: false,
   });
 
   // Load persisted settings on mount
@@ -113,72 +126,52 @@ export default function SettingsPage() {
     {
       id: "company" as SettingsTab,
       label: "Company Profile",
-      icon: (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-        </svg>
-      )
+      icon: <Building2 className="w-4 h-4" />,
     },
     {
       id: "invoice" as SettingsTab,
       label: "Invoice & Billing",
-      icon: (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-      )
+      icon: <FileSpreadsheet className="w-4 h-4" />,
     },
     {
       id: "tax" as SettingsTab,
       label: "Tax & GST Rules",
-      icon: (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-        </svg>
-      )
+      icon: <Receipt className="w-4 h-4" />,
     },
     {
       id: "bank" as SettingsTab,
       label: "Bank Remittance",
-      icon: (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-        </svg>
-      )
+      icon: <Landmark className="w-4 h-4" />,
     },
     {
       id: "security" as SettingsTab,
       label: "Security & Access",
-      icon: (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-        </svg>
-      )
-    }
+      icon: <ShieldCheck className="w-4 h-4" />,
+    },
   ];
 
   return (
-    <div className="space-y-6 pb-16 font-sans">
+    <div className="space-y-6 pb-16 font-sans w-full max-w-full">
       {/* Toast Alert */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-gray-900 text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-3 duration-200 text-sm font-medium">
-          <span className="w-2 h-2 rounded-full bg-[#76c816]"></span>
+        <div className="fixed bottom-6 right-6 z-50 bg-[#23160e] text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-3 duration-200 text-xs font-semibold">
+          <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
           {toastMessage}
         </div>
       )}
 
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-100 pb-5">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-black text-[#23160e] tracking-tight">
               System Settings &amp; Configuration
             </h1>
-            <span className="bg-emerald-50 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full border border-emerald-200">
+            <span className="bg-[#eaf8ea] text-[#1e822d] text-xs font-bold px-3 py-0.5 rounded-full border border-[#c4eec4]">
               Active Profile
             </span>
           </div>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-xs sm:text-sm text-[#8a7566] font-medium mt-1">
             Configure default billing parameters, company letterhead, tax rules, bank accounts, and invoice templates for SiddhiVinayak Enterprise.
           </p>
         </div>
@@ -187,166 +180,196 @@ export default function SettingsPage() {
           type="button"
           onClick={handleSaveSettings}
           disabled={isSaving}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#c51f2a] hover:bg-[#a81922] text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-red-500/20 active:scale-95 disabled:opacity-50"
+          className="flex items-center gap-2 px-5 py-2.5 bg-[#5c341f] hover:bg-[#472716] text-white font-bold text-xs rounded-xl transition-all shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer"
         >
           {isSaving ? (
             <>
-              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-              </svg>
-              Saving Changes...
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <span>Saving Changes...</span>
             </>
           ) : (
             <>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Save All Settings
+              <Save className="w-4 h-4" />
+              <span>Save All Settings</span>
             </>
           )}
         </button>
       </div>
 
-      {/* Main Settings Card */}
-      <div className="bg-white rounded-3xl border border-gray-200/80 shadow-xs overflow-hidden grid grid-cols-1 md:grid-cols-12 min-h-[580px]">
-        {/* Navigation Tabs (Horizontal scroll on mobile, vertical stack on desktop) */}
-        <div className="md:col-span-3 border-b md:border-b-0 md:border-r border-gray-100 bg-gray-50/50 p-3 sm:p-4">
-          <p className="hidden md:block px-3 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-            Categories
-          </p>
-          <div className="flex md:flex-col overflow-x-auto gap-1 pb-1 md:pb-0 scrollbar-none">
-            {tabs.map((t) => {
-              const isActive = activeTab === t.id;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => setActiveTab(t.id)}
-                  className={`flex items-center gap-2.5 px-3.5 py-2.5 sm:py-3 rounded-2xl text-xs font-bold transition-all text-left flex-shrink-0 md:w-full ${
-                    isActive
-                      ? "bg-white text-gray-900 shadow-sm border border-gray-200/80 font-black"
-                      : "text-gray-600 hover:bg-gray-100/80 hover:text-gray-900 bg-transparent"
-                  }`}
-                >
-                  <div className={`${isActive ? "text-[#c51f2a]" : "text-gray-400"}`}>
-                    {t.icon}
-                  </div>
-                  <span className="whitespace-nowrap">{t.label}</span>
-                </button>
-              );
-            })}
+      {/* Main Settings Full-Width Grid Card */}
+      <div className="bg-white rounded-3xl border border-[#ede5dd] shadow-xs overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[620px] w-full">
+        {/* Navigation Tabs (Left Rail - 3 Cols on wide screens) */}
+        <div className="lg:col-span-3 border-b lg:border-b-0 lg:border-r border-[#ede5dd] bg-[#faf7f4]/60 p-4 sm:p-5 flex flex-col justify-between">
+          <div>
+            <p className="px-3 text-[10px] font-bold text-[#8a7566] uppercase tracking-wider mb-3">
+              Settings Categories
+            </p>
+            <div className="flex lg:flex-col overflow-x-auto gap-1.5 pb-2 lg:pb-0">
+              {tabs.map((t) => {
+                const isActive = activeTab === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setActiveTab(t.id)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold transition-all text-left whitespace-nowrap cursor-pointer ${
+                      isActive
+                        ? "bg-[#5c341f] text-white shadow-xs"
+                        : "text-[#8a7566] hover:bg-[#ede5dd]/60 hover:text-[#23160e] bg-transparent"
+                    }`}
+                  >
+                    <div className={isActive ? "text-white" : "text-[#8a7566]"}>
+                      {t.icon}
+                    </div>
+                    <span>{t.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="hidden md:block pt-6 px-3">
-            <div className="p-3 bg-red-50/60 rounded-2xl border border-red-100 text-xs">
-              <p className="font-extrabold text-[#c51f2a]">Single Source of Truth</p>
-              <p className="text-[11px] text-gray-600 mt-1 leading-relaxed">
-                Changes saved here reflect across Invoice Generation, Bill Book headers, and Financial Reports.
+          <div className="hidden lg:block pt-6">
+            <div className="p-4 bg-[#faf7f4] rounded-2xl border border-[#ede5dd] text-xs">
+              <div className="flex items-center gap-2 text-[#5c341f] font-black text-xs mb-1">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Single Source of Truth</span>
+              </div>
+              <p className="text-[11px] text-[#8a7566] leading-relaxed">
+                Changes saved here reflect across Invoice Generation, Bill Book headers, and Financial Reports automatically.
               </p>
             </div>
           </div>
         </div>
 
-        {/* Right Settings Form Content */}
-        <div className="md:col-span-9 p-6 sm:p-8 overflow-y-auto">
+        {/* Right Settings Form Content (9 Cols on wide screens) */}
+        <div className="lg:col-span-9 p-6 sm:p-8 lg:p-10 overflow-y-auto">
           {/* TAB 1: COMPANY PROFILE */}
           {activeTab === "company" && (
-            <div className="space-y-6 animate-in fade-in duration-150">
-              <div className="border-b border-gray-100 pb-3">
-                <h3 className="text-base font-black text-gray-900">Company &amp; Legal Profile</h3>
-                <p className="text-xs text-gray-500 mt-0.5">
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="border-b border-[#ede5dd] pb-4">
+                <h3 className="text-lg font-black text-[#23160e]">Company &amp; Legal Profile</h3>
+                <p className="text-xs text-[#8a7566] mt-0.5">
                   Official corporate information used for invoices, delivery challans, and tax authorities.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                <div className="sm:col-span-2">
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Company Trade Name</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div className="md:col-span-2">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    Company Trade Name
+                  </label>
                   <input
                     type="text"
                     value={companySettings.name}
                     onChange={(e) => setCompanySettings({ ...companySettings, name: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-bold text-gray-900 text-sm focus:ring-1 focus:ring-red-400 outline-none"
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-bold text-[#23160e] text-sm focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
                   />
                 </div>
 
-                <div className="sm:col-span-2">
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Company Subtitle / Tagline</label>
-                  <input
-                    type="text"
-                    value={companySettings.tagline}
-                    onChange={(e) => setCompanySettings({ ...companySettings, tagline: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-medium text-gray-800 focus:ring-1 focus:ring-red-400 outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Primary Phone</label>
-                  <input
-                    type="text"
-                    value={companySettings.phone}
-                    onChange={(e) => setCompanySettings({ ...companySettings, phone: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-medium text-gray-800"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Corporate Email</label>
-                  <input
-                    type="email"
-                    value={companySettings.email}
-                    onChange={(e) => setCompanySettings({ ...companySettings, email: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-medium text-gray-800"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Website URL</label>
-                  <input
-                    type="text"
-                    value={companySettings.website}
-                    onChange={(e) => setCompanySettings({ ...companySettings, website: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-medium text-gray-800"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">GSTIN Number</label>
-                  <input
-                    type="text"
-                    value={companySettings.gstin}
-                    onChange={(e) => setCompanySettings({ ...companySettings, gstin: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-mono font-bold text-gray-900"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">State &amp; State Code</label>
+                <div className="md:col-span-2 lg:col-span-1">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    State &amp; State Code
+                  </label>
                   <input
                     type="text"
                     value={`${companySettings.state} (${companySettings.stateCode})`}
                     onChange={(e) => setCompanySettings({ ...companySettings, state: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-medium text-gray-800"
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-medium text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
+                  />
+                </div>
+
+                <div className="md:col-span-2 lg:col-span-3">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    Company Subtitle / Tagline
+                  </label>
+                  <input
+                    type="text"
+                    value={companySettings.tagline}
+                    onChange={(e) => setCompanySettings({ ...companySettings, tagline: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-medium text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Income Tax PAN</label>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    Primary Phone
+                  </label>
+                  <input
+                    type="text"
+                    value={companySettings.phone}
+                    onChange={(e) => setCompanySettings({ ...companySettings, phone: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-bold text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    Corporate Email
+                  </label>
+                  <input
+                    type="email"
+                    value={companySettings.email}
+                    onChange={(e) => setCompanySettings({ ...companySettings, email: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-medium text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    Website URL
+                  </label>
+                  <input
+                    type="text"
+                    value={companySettings.website}
+                    onChange={(e) => setCompanySettings({ ...companySettings, website: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-medium text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    GSTIN Number
+                  </label>
+                  <input
+                    type="text"
+                    value={companySettings.gstin}
+                    onChange={(e) => setCompanySettings({ ...companySettings, gstin: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-mono font-bold text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    Income Tax PAN
+                  </label>
                   <input
                     type="text"
                     value={companySettings.pan}
                     onChange={(e) => setCompanySettings({ ...companySettings, pan: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-mono font-bold text-gray-900"
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-mono font-bold text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
                   />
                 </div>
 
-                <div className="sm:col-span-2">
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Registered Factory / Workshop Address</label>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    CIN Number
+                  </label>
+                  <input
+                    type="text"
+                    value={companySettings.cin}
+                    onChange={(e) => setCompanySettings({ ...companySettings, cin: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-mono font-medium text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
+                  />
+                </div>
+
+                <div className="md:col-span-2 lg:col-span-3">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    Registered Factory / Workshop Address
+                  </label>
                   <textarea
                     rows={2}
                     value={companySettings.address}
                     onChange={(e) => setCompanySettings({ ...companySettings, address: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-medium text-gray-800 resize-none"
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-medium text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f] resize-none"
                   />
                 </div>
               </div>
@@ -355,31 +378,35 @@ export default function SettingsPage() {
 
           {/* TAB 2: INVOICE & BILLING DEFAULTS */}
           {activeTab === "invoice" && (
-            <div className="space-y-6 animate-in fade-in duration-150">
-              <div className="border-b border-gray-100 pb-3">
-                <h3 className="text-base font-black text-gray-900">Invoice &amp; Billing Defaults</h3>
-                <p className="text-xs text-gray-500 mt-0.5">
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="border-b border-[#ede5dd] pb-4">
+                <h3 className="text-lg font-black text-[#23160e]">Invoice &amp; Billing Defaults</h3>
+                <p className="text-xs text-[#8a7566] mt-0.5">
                   Default sequence prefix, payment terms, and automated inventory sync.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Invoice Prefix</label>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    Invoice Prefix
+                  </label>
                   <input
                     type="text"
                     value={invoiceDefaults.prefix}
                     onChange={(e) => setInvoiceDefaults({ ...invoiceDefaults, prefix: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-bold font-mono text-gray-900"
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-bold font-mono text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Default Payment Terms</label>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    Default Payment Terms
+                  </label>
                   <select
                     value={invoiceDefaults.defaultTerms}
                     onChange={(e) => setInvoiceDefaults({ ...invoiceDefaults, defaultTerms: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-medium text-gray-800"
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-bold text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
                   >
                     <option value="Immediate">Due on Receipt (Immediate)</option>
                     <option value="7 Days">7 Days</option>
@@ -389,11 +416,13 @@ export default function SettingsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Default Payment Method</label>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    Default Payment Method
+                  </label>
                   <select
                     value={invoiceDefaults.defaultPaymentMethod}
                     onChange={(e) => setInvoiceDefaults({ ...invoiceDefaults, defaultPaymentMethod: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-medium text-gray-800"
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-bold text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
                   >
                     <option value="Bank Transfer">Bank Transfer (NEFT/RTGS/IMPS)</option>
                     <option value="UPI">UPI / QR Code</option>
@@ -402,41 +431,47 @@ export default function SettingsPage() {
                   </select>
                 </div>
 
-                <div className="flex flex-col justify-end">
-                  <label className="flex items-center gap-2 cursor-pointer p-2.5 bg-gray-50 rounded-xl border border-gray-200">
+                <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                  <label className="flex items-center gap-3 cursor-pointer p-4 bg-[#faf7f4] rounded-2xl border border-[#ede5dd]">
                     <input
                       type="checkbox"
                       checked={invoiceDefaults.autoDecrementStock}
                       onChange={(e) => setInvoiceDefaults({ ...invoiceDefaults, autoDecrementStock: e.target.checked })}
-                      className="w-4 h-4 text-red-600 rounded"
+                      className="w-4 h-4 text-[#5c341f] rounded"
                     />
-                    <span className="font-bold text-gray-800 text-[11px]">
-                      Auto-decrement inventory stock when invoice is generated
-                    </span>
+                    <div>
+                      <p className="font-bold text-[#23160e] text-xs">
+                        Auto-decrement inventory stock upon invoice creation
+                      </p>
+                      <p className="text-[10px] text-[#8a7566]">Reduces item stock count in catalog automatically</p>
+                    </div>
                   </label>
-                </div>
 
-                <div className="sm:col-span-2">
-                  <label className="flex items-center gap-2 cursor-pointer p-2.5 bg-gray-50 rounded-xl border border-gray-200">
+                  <label className="flex items-center gap-3 cursor-pointer p-4 bg-[#faf7f4] rounded-2xl border border-[#ede5dd]">
                     <input
                       type="checkbox"
                       checked={invoiceDefaults.showProductImageOnBill}
                       onChange={(e) => setInvoiceDefaults({ ...invoiceDefaults, showProductImageOnBill: e.target.checked })}
-                      className="w-4 h-4 text-red-600 rounded"
+                      className="w-4 h-4 text-[#5c341f] rounded"
                     />
-                    <span className="font-bold text-gray-800 text-[11px]">
-                      Always render product thumbnail images in the A4 bill book table
-                    </span>
+                    <div>
+                      <p className="font-bold text-[#23160e] text-xs">
+                        Render product photo in PDF &amp; Print
+                      </p>
+                      <p className="text-[10px] text-[#8a7566]">Displays component thumbnails on A4 tax invoices</p>
+                    </div>
                   </label>
                 </div>
 
-                <div className="sm:col-span-2">
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Default Terms and Conditions Text</label>
+                <div className="md:col-span-2 lg:col-span-3">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    Standard Terms &amp; Warranty Conditions
+                  </label>
                   <textarea
                     rows={4}
                     value={invoiceDefaults.notes}
                     onChange={(e) => setInvoiceDefaults({ ...invoiceDefaults, notes: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-medium text-gray-700 resize-none text-[11px] leading-relaxed"
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-medium text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f] resize-none leading-relaxed"
                   />
                 </div>
               </div>
@@ -445,21 +480,23 @@ export default function SettingsPage() {
 
           {/* TAB 3: TAX & GST RULES */}
           {activeTab === "tax" && (
-            <div className="space-y-6 animate-in fade-in duration-150">
-              <div className="border-b border-gray-100 pb-3">
-                <h3 className="text-base font-black text-gray-900">Tax &amp; GST Configuration</h3>
-                <p className="text-xs text-gray-500 mt-0.5">
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="border-b border-[#ede5dd] pb-4">
+                <h3 className="text-lg font-black text-[#23160e]">Tax &amp; GST Configuration</h3>
+                <p className="text-xs text-[#8a7566] mt-0.5">
                   Configure Indian GST tax slabs, automated CGST/SGST splits, and thresholds.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Standard Default Tax Rate (%)</label>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    Standard Default Tax Rate (%)
+                  </label>
                   <select
                     value={taxSettings.defaultTaxRate}
                     onChange={(e) => setTaxSettings({ ...taxSettings, defaultTaxRate: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-bold text-gray-900"
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-bold text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
                   >
                     <option value="0">0% (GST Exempt)</option>
                     <option value="5">5% GST</option>
@@ -470,39 +507,32 @@ export default function SettingsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">E-Way Bill / E-Invoice Threshold (₹)</label>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    E-Way Bill / E-Invoice Threshold (₹)
+                  </label>
                   <input
                     type="number"
                     value={taxSettings.eInvoiceThreshold}
                     onChange={(e) => setTaxSettings({ ...taxSettings, eInvoiceThreshold: Number(e.target.value) })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-mono font-bold text-gray-800"
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-mono font-bold text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
                   />
                 </div>
 
-                <div className="sm:col-span-2 space-y-2 pt-2">
-                  <label className="flex items-center gap-2 cursor-pointer p-3 bg-gray-50 rounded-xl border border-gray-200">
+                <div className="md:col-span-2 space-y-3 pt-2">
+                  <label className="flex items-center gap-3 cursor-pointer p-4 bg-[#faf7f4] rounded-2xl border border-[#ede5dd]">
                     <input
                       type="checkbox"
                       checked={taxSettings.enableCgstSgstSplit}
                       onChange={(e) => setTaxSettings({ ...taxSettings, enableCgstSgstSplit: e.target.checked })}
-                      className="w-4 h-4 text-red-600 rounded"
+                      className="w-4 h-4 text-[#5c341f] rounded"
                     />
                     <div>
-                      <p className="font-bold text-gray-900">Automatic CGST (50%) + SGST (50%) split for Intra-State (Gujarat)</p>
-                      <p className="text-[11px] text-gray-500">Automatically creates equal Central &amp; State tax components</p>
-                    </div>
-                  </label>
-
-                  <label className="flex items-center gap-2 cursor-pointer p-3 bg-gray-50 rounded-xl border border-gray-200">
-                    <input
-                      type="checkbox"
-                      checked={taxSettings.hsnSummaryEnabled}
-                      onChange={(e) => setTaxSettings({ ...taxSettings, hsnSummaryEnabled: e.target.checked })}
-                      className="w-4 h-4 text-red-600 rounded"
-                    />
-                    <div>
-                      <p className="font-bold text-gray-900">Include HSN/SAC Summary in GSTR-1 Register Reports</p>
-                      <p className="text-[11px] text-gray-500">Includes 8-digit HSN breakdown in GST summary report</p>
+                      <p className="font-bold text-[#23160e] text-xs">
+                        Automatic CGST (50%) + SGST (50%) split for Intra-State (Gujarat)
+                      </p>
+                      <p className="text-[10px] text-[#8a7566]">
+                        Automatically bifurcates into Central and State GST ledgers for tax returns
+                      </p>
                     </div>
                   </label>
                 </div>
@@ -512,72 +542,84 @@ export default function SettingsPage() {
 
           {/* TAB 4: BANK REMITTANCE */}
           {activeTab === "bank" && (
-            <div className="space-y-6 animate-in fade-in duration-150">
-              <div className="border-b border-gray-100 pb-3">
-                <h3 className="text-base font-black text-gray-900">Remittance Bank Details</h3>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  The bank account printed on all invoices for direct wire transfer from buyers.
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="border-b border-[#ede5dd] pb-4">
+                <h3 className="text-lg font-black text-[#23160e]">Bank Remittance Accounts</h3>
+                <p className="text-xs text-[#8a7566] mt-0.5">
+                  Default company bank accounts printed on tax bills for customer payment remittance.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Bank Name</label>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    Bank Name
+                  </label>
                   <input
                     type="text"
                     value={bankSettings.bankName}
                     onChange={(e) => setBankSettings({ ...bankSettings, bankName: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-bold text-gray-900"
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-bold text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Account Holder Name</label>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    Account Holder Name
+                  </label>
                   <input
                     type="text"
                     value={bankSettings.accountHolder}
                     onChange={(e) => setBankSettings({ ...bankSettings, accountHolder: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-bold text-gray-900"
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-bold text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Account Number</label>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    Account Number
+                  </label>
                   <input
                     type="text"
                     value={bankSettings.accountNumber}
                     onChange={(e) => setBankSettings({ ...bankSettings, accountNumber: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-mono font-bold text-gray-900"
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-mono font-bold text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">IFSC Code</label>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    IFSC Code
+                  </label>
                   <input
                     type="text"
                     value={bankSettings.ifscCode}
-                    onChange={(e) => setBankSettings({ ...bankSettings, ifscCode: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-mono font-bold text-gray-900"
+                    onChange={(e) => setBankSettings({ ...bankSettings, ifscCode: e.target.value.toUpperCase() })}
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-mono font-bold text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Branch Name</label>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    Branch Name
+                  </label>
                   <input
                     type="text"
                     value={bankSettings.branchName}
                     onChange={(e) => setBankSettings({ ...bankSettings, branchName: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-medium text-gray-800"
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-medium text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Corporate UPI ID</label>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    UPI ID / VPA
+                  </label>
                   <input
                     type="text"
                     value={bankSettings.upiId}
                     onChange={(e) => setBankSettings({ ...bankSettings, upiId: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-mono font-bold text-gray-900"
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-mono font-bold text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
                   />
                 </div>
               </div>
@@ -586,58 +628,39 @@ export default function SettingsPage() {
 
           {/* TAB 5: SECURITY & ACCESS */}
           {activeTab === "security" && (
-            <div className="space-y-6 animate-in fade-in duration-150">
-              <div className="border-b border-gray-100 pb-3">
-                <h3 className="text-base font-black text-gray-900">Security &amp; Administrator Access</h3>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Update administrator credentials, active session duration, and access security.
+            <div className="space-y-6 animate-in fade-in duration-200">
+              <div className="border-b border-[#ede5dd] pb-4">
+                <h3 className="text-lg font-black text-[#23160e]">Security &amp; Session Configuration</h3>
+                <p className="text-xs text-[#8a7566] mt-0.5">
+                  Manage master administrative account credentials, multi-factor, and timeout policies.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                <div className="sm:col-span-2">
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Admin Email Address</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    Administrator Email
+                  </label>
                   <input
                     type="email"
                     value={securitySettings.adminEmail}
                     onChange={(e) => setSecuritySettings({ ...securitySettings, adminEmail: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-medium text-gray-900"
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-bold text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Current Password</label>
-                  <input
-                    type="password"
-                    placeholder="••••••••"
-                    value={securitySettings.currentPassword}
-                    onChange={(e) => setSecuritySettings({ ...securitySettings, currentPassword: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">New Password</label>
-                  <input
-                    type="password"
-                    placeholder="Enter new strong password"
-                    value={securitySettings.newPassword}
-                    onChange={(e) => setSecuritySettings({ ...securitySettings, newPassword: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-600 mb-1">Session Inactivity Timeout</label>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#8a7566] mb-1.5">
+                    Session Timeout
+                  </label>
                   <select
                     value={securitySettings.sessionTimeout}
                     onChange={(e) => setSecuritySettings({ ...securitySettings, sessionTimeout: e.target.value })}
-                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl font-medium text-gray-800"
+                    className="w-full px-4 py-2.5 bg-[#faf7f4] border border-[#ede5dd] rounded-xl font-bold text-[#23160e] text-xs focus:outline-none focus:ring-2 focus:ring-[#5c341f]/20 focus:border-[#5c341f]"
                   >
-                    <option value="2 Hours">2 Hours</option>
-                    <option value="8 Hours">8 Hours (Standard Working Day)</option>
+                    <option value="4 Hours">4 Hours</option>
+                    <option value="8 Hours">8 Hours (Full Shift)</option>
                     <option value="24 Hours">24 Hours</option>
-                    <option value="Never">Never</option>
                   </select>
                 </div>
               </div>

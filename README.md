@@ -105,8 +105,8 @@ MONGODB_DB_NAME=bill_generator_db
 ```
 
 ```bash
-# Start the backend server
-uvicorn main:app --reload --port 8000
+# Start the backend server (host 0.0.0.0 allows mobile & LAN devices to connect)
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 The API will be available at `http://localhost:8000`

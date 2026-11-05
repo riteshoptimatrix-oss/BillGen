@@ -13,7 +13,7 @@ load_dotenv()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Connect to MongoDB using env vars
-    mongodb_url = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+    mongodb_url = os.getenv("MONGODB_URI") or os.getenv("MONGODB_URL", "mongodb://localhost:27017")
     db_name = os.getenv("MONGODB_DB_NAME", "bill_generator_db")
     
     app.mongodb_client = AsyncIOMotorClient(mongodb_url)
@@ -29,10 +29,15 @@ from routers import products, labours, dashboard, customers, invoices, purchases
 
 app = FastAPI(title="Bill Generator API", lifespan=lifespan)
 
-# Configure CORS for frontend access
+# Configure CORS for frontend access (supports localhost, LAN IP 192.168.x.x, and mobile testing)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+    ],
+    allow_origin_regex=r"^https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

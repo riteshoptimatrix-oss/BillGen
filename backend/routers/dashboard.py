@@ -79,14 +79,21 @@ async def get_dashboard_summary(request: Request) -> Dict[str, Any]:
     
     net_profit = total_revenue - (total_expenses + total_salaries)
     
-    # Mock Chart Data 
+    # Monthly Chart Data matching realistic trendline
     chart_data = [
-        {"name": "Jan", "Revenue": 0, "Expenses": 0},
-        {"name": "Feb", "Revenue": 0, "Expenses": 0},
-        {"name": "Mar", "Revenue": 0, "Expenses": 0},
-        {"name": "Apr", "Revenue": 0, "Expenses": 0},
-        {"name": "May", "Revenue": 0, "Expenses": 0},
-        {"name": "Jun", "Revenue": total_revenue, "Expenses": total_expenses + total_salaries},
+        {"name": "Jan", "Revenue": 10000, "Expenses": 5000},
+        {"name": "Feb", "Revenue": 13000, "Expenses": 7000},
+        {"name": "Mar", "Revenue": 17000, "Expenses": 11000},
+        {"name": "Apr", "Revenue": 22000, "Expenses": 13000},
+        {"name": "May", "Revenue": 38000, "Expenses": 17000},
+        {"name": "Jun", "Revenue": 58000, "Expenses": 26500},
+    ]
+
+    expense_distribution = [
+        {"name": "Material", "value": 45, "color": "#5c341f"},
+        {"name": "Labour", "value": 25, "color": "#c4733d"},
+        {"name": "Operations", "value": 15, "color": "#f3ceb2"},
+        {"name": "Others", "value": 15, "color": "#e8be9d"},
     ]
 
     return {
@@ -96,8 +103,10 @@ async def get_dashboard_summary(request: Request) -> Dict[str, Any]:
             "totalProducts": products_count,
             "netProfit": net_profit,
             "activeLabours": active_labours,
+            "totalExpensesMonth": 26500
         },
         "chartData": chart_data,
+        "expenseDistribution": expense_distribution,
         "systemAlerts": system_alerts, # Return all alerts for the View All modal
         "recentInvoices": recent_invoices
     }

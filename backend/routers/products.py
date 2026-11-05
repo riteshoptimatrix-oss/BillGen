@@ -23,7 +23,7 @@ async def upload_image(file: UploadFile = File(...)):
         content = await file.read()
         await out_file.write(content)
         
-    return {"url": f"http://localhost:8000/uploads/{unique_filename}"}
+    return {"url": f"http://localhost:8000/uploads/{unique_filename}", "path": f"/uploads/{unique_filename}"}
 
 @router.post("/", response_description="Add new product", response_model=Product)
 async def create_product(request: Request, product: ProductCreate = Body(...)):

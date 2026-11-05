@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { getApiUrl } from "@/lib/api";
+import { exportElementToPDF } from "@/lib/pdf";
 
 interface InvoiceItem {
   product_id?: string;
@@ -142,7 +144,7 @@ export default function CreateInvoicePage() {
     }
   }, []);
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+  const apiUrl = getApiUrl();
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -480,58 +482,11 @@ export default function CreateInvoicePage() {
     showToast("Generating direct PDF download...");
 
     try {
-      // 1. Load html2pdf bundle if not already loaded in browser window
-      if (!(window as any).html2pdf) {
-        await new Promise<void>((resolve, reject) => {
-          const script = document.createElement("script");
-          script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-          script.onload = () => resolve();
-          script.onerror = () => reject(new Error("Failed to load PDF engine"));
-          document.head.appendChild(script);
-        });
-      }
-
-      // 2. Clone the element to render at pure unscaled A4 dimensions (210mm x 297mm)
-      const clone = invoiceEl.cloneNode(true) as HTMLElement;
-      clone.style.transform = "none";
-      clone.style.margin = "0";
-      clone.style.boxShadow = "none";
-      clone.style.width = "210mm";
-      clone.style.height = "297mm";
-      clone.style.minHeight = "297mm";
-      clone.style.position = "fixed";
-      clone.style.top = "-99999px";
-      clone.style.left = "-99999px";
-      clone.style.zIndex = "-9999";
-      document.body.appendChild(clone);
-
       const filename = `Invoice-${invoiceNumber || "SiddhiVinayak"}.pdf`;
-
-      const opt = {
-        margin: 0,
-        filename: filename,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          scrollY: 0,
-          scrollX: 0
-        },
-        jsPDF: {
-          unit: "mm",
-          format: "a4",
-          orientation: "portrait"
-        }
-      };
-
-      await (window as any).html2pdf().set(opt).from(clone).save();
-      document.body.removeChild(clone);
+      await exportElementToPDF(invoiceEl, filename);
       showToast(`Downloaded ${filename} directly!`);
     } catch (err) {
       console.error("Direct PDF download error:", err);
-      // Fallback: window.print() if script failed
-      alert("Direct PDF engine unavailable. Opening print preview as fallback.");
       window.print();
     } finally {
       setIsDownloading(false);
@@ -558,12 +513,12 @@ export default function CreateInvoicePage() {
       )}
 
       {/* Top Action Bar (Hidden during print) */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b border-gray-100 pb-4 print:hidden">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b border-[#ede5dd] pb-4 print:hidden">
         <div>
           <div className="flex items-center gap-3">
             <Link
               href="/bill-invoice"
-              className="p-2 rounded-xl border border-gray-200 hover:bg-gray-100 text-gray-600 transition-colors"
+              className="p-2 rounded-xl border border-[#ede5dd] hover:bg-gray-100 text-gray-600 transition-colors"
               title="Back to Invoices"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -613,7 +568,7 @@ export default function CreateInvoicePage() {
             type="button"
             onClick={handlePrint}
             title="Print via Printer Dialog"
-            className="p-2.5 bg-white border border-gray-200 text-gray-700 hover:text-gray-900 rounded-xl hover:bg-gray-50 shadow-xs transition-all active:scale-95"
+            className="p-2.5 bg-white border border-[#ede5dd] text-gray-700 hover:text-gray-900 rounded-xl hover:bg-gray-50 shadow-xs transition-all active:scale-95"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -624,7 +579,7 @@ export default function CreateInvoicePage() {
             type="button"
             onClick={handleSaveInvoice}
             disabled={isSubmitting}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2.5 bg-[#c51f2a] hover:bg-[#a81922] text-white text-xs font-bold rounded-xl shadow-md shadow-red-500/20 transition-all active:scale-95 disabled:opacity-50"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2.5 bg-[#5c341f] hover:bg-[#472716] text-white text-xs font-bold rounded-xl shadow-md shadow-amber-900/10 transition-all active:scale-95 disabled:opacity-50"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -668,7 +623,7 @@ export default function CreateInvoicePage() {
         {/* ======================================================== */}
         <div className={`xl:col-span-6 space-y-6 print:hidden ${mobileActiveView === "form" ? "block" : "hidden xl:block"}`}>
           {/* SECTION 1: CUSTOMER DETAILS */}
-          <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-xs space-y-4">
+          <div className="bg-white p-5 rounded-2xl border border-[#ede5dd]/80 shadow-xs space-y-4">
             <div className="flex justify-between items-center border-b pb-2">
               <h2 className="text-xs font-black text-gray-900 uppercase tracking-wider flex items-center gap-2">
                 <span className="w-5 h-5 rounded-full bg-[#76c816] text-white flex items-center justify-center font-bold text-[10px]">
@@ -687,7 +642,7 @@ export default function CreateInvoicePage() {
               <select
                 value={selectedCustomerId}
                 onChange={(e) => handleCustomerSelect(e.target.value)}
-                className="w-full px-3.5 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#76c816]"
+                className="w-full px-3.5 py-2 text-xs bg-gray-50 border border-[#ede5dd] rounded-xl font-bold text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#76c816]"
               >
                 <option value="">-- Choose Existing Customer --</option>
                 {customers.map((c) => (
@@ -708,7 +663,7 @@ export default function CreateInvoicePage() {
                   value={clientName}
                   onChange={(e) => setClientName(e.target.value)}
                   placeholder="e.g. Jonathan Manathon"
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg font-semibold"
+                  className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg font-semibold"
                 />
               </div>
 
@@ -721,7 +676,7 @@ export default function CreateInvoicePage() {
                   value={companyClientName}
                   onChange={(e) => setCompanyClientName(e.target.value)}
                   placeholder="e.g. Vorfun Medicine"
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg font-semibold"
+                  className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg font-semibold"
                 />
               </div>
 
@@ -734,7 +689,7 @@ export default function CreateInvoicePage() {
                   value={clientPhone}
                   onChange={(e) => setClientPhone(e.target.value)}
                   placeholder="e.g. +01 234 55678"
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg font-medium"
+                  className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg font-medium"
                 />
               </div>
 
@@ -747,7 +702,7 @@ export default function CreateInvoicePage() {
                   value={clientGst}
                   onChange={(e) => setClientGst(e.target.value)}
                   placeholder="e.g. 24AABCG1234F1Z8"
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg font-mono"
+                  className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg font-mono"
                 />
               </div>
 
@@ -760,14 +715,14 @@ export default function CreateInvoicePage() {
                   value={clientAddress}
                   onChange={(e) => setClientAddress(e.target.value)}
                   placeholder="e.g. 88B Fortuna Street, NYC"
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg"
+                  className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg"
                 />
               </div>
             </div>
           </div>
 
           {/* SECTION 2: INVOICE META & PAYMENT TERMS */}
-          <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-xs space-y-4">
+          <div className="bg-white p-5 rounded-2xl border border-[#ede5dd]/80 shadow-xs space-y-4">
             <div className="flex justify-between items-center border-b pb-2">
               <h2 className="text-xs font-black text-gray-900 uppercase tracking-wider flex items-center gap-2">
                 <span className="w-5 h-5 rounded-full bg-[#76c816] text-white flex items-center justify-center font-bold text-[10px]">
@@ -788,7 +743,7 @@ export default function CreateInvoicePage() {
                   value={invoiceNumber}
                   onChange={(e) => setInvoiceNumber(e.target.value)}
                   placeholder="001-245/670"
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg font-mono font-bold text-[#c51f2a]"
+                  className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg font-mono font-bold text-[#5c341f]"
                 />
               </div>
 
@@ -800,7 +755,7 @@ export default function CreateInvoicePage() {
                   type="date"
                   value={invoiceDate}
                   onChange={(e) => setInvoiceDate(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg font-medium"
+                  className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg font-medium"
                 />
               </div>
 
@@ -811,7 +766,7 @@ export default function CreateInvoicePage() {
                 <select
                   value={paymentTerms}
                   onChange={(e) => setPaymentTerms(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg font-medium"
+                  className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg font-medium"
                 >
                   <option value="7 Days">7 Days</option>
                   <option value="15 Days">15 Days</option>
@@ -830,7 +785,7 @@ export default function CreateInvoicePage() {
                     min="1"
                     value={customTermsDays}
                     onChange={(e) => setCustomTermsDays(Number(e.target.value))}
-                    className="w-full px-3 py-1.5 border border-gray-200 rounded-lg font-bold"
+                    className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg font-bold"
                   />
                 </div>
               )}
@@ -843,7 +798,7 @@ export default function CreateInvoicePage() {
                   type="text"
                   readOnly
                   value={formattedDueDate}
-                  className="w-full px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg font-bold text-gray-700 cursor-not-allowed"
+                  className="w-full px-3 py-1.5 bg-gray-50 border border-[#ede5dd] rounded-lg font-bold text-gray-700 cursor-not-allowed"
                 />
               </div>
 
@@ -854,7 +809,7 @@ export default function CreateInvoicePage() {
                 <select
                   value={taxRate}
                   onChange={(e) => setTaxRate(Number(e.target.value))}
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg font-bold text-gray-800"
+                  className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg font-bold text-gray-800"
                 >
                   <option value="0">0% (Exempt)</option>
                   <option value="5">5% GST</option>
@@ -873,17 +828,17 @@ export default function CreateInvoicePage() {
                   min="0"
                   value={discountAmount}
                   onChange={(e) => setDiscountAmount(Number(e.target.value))}
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg font-bold"
+                  className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg font-bold"
                 />
               </div>
             </div>
           </div>
 
           {/* SECTION 3: PRODUCTS SELECTION & INVENTORY CHECK */}
-          <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-xs space-y-4">
+          <div className="bg-white p-5 rounded-2xl border border-[#ede5dd]/80 shadow-xs space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1 border-b pb-2">
               <div className="flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-rose-100 text-[#c51f2a] flex items-center justify-center font-black text-[11px]">
+                <span className="w-5 h-5 rounded-full bg-rose-100 text-[#5c341f] flex items-center justify-center font-black text-[11px]">
                   3
                 </span>
                 <h2 className="text-xs font-black text-gray-900 uppercase tracking-wider">
@@ -917,11 +872,11 @@ export default function CreateInvoicePage() {
                     onClick={() => handleSelectProduct(prod)}
                     className={`flex items-center gap-3 p-3 bg-white border rounded-2xl cursor-pointer transition-all ${
                       isSelected
-                        ? "border-[#c51f2a] ring-2 ring-red-100 shadow-md bg-red-50/20"
-                        : "border-gray-200/90 hover:border-gray-300 hover:shadow-xs"
+                        ? "border-[#5c341f] ring-2 ring-red-100 shadow-md bg-red-50/20"
+                        : "border-[#ede5dd]/90 hover:border-gray-300 hover:shadow-xs"
                     }`}
                   >
-                    <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <div className="w-12 h-12 rounded-xl bg-gray-50 border border-[#ede5dd] flex items-center justify-center overflow-hidden flex-shrink-0">
                       {prod.image ? (
                         <Image
                           src={prod.image}
@@ -964,10 +919,10 @@ export default function CreateInvoicePage() {
             {selectedProductToAdd && (
               <div className="p-3 bg-red-50/40 border border-red-200/70 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs animate-in fade-in duration-150">
                 <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#c51f2a]"></span>
+                  <span className="w-2 h-2 rounded-full bg-[#5c341f]"></span>
                   <span className="font-bold text-gray-800">Selected:</span>
                   <span className="font-semibold text-gray-900">{selectedProductToAdd.name}</span>
-                  <span className="font-bold text-[#c51f2a]">
+                  <span className="font-bold text-[#5c341f]">
                     (₹{selectedProductToAdd.price.toLocaleString("en-IN")})
                   </span>
                 </div>
@@ -989,7 +944,7 @@ export default function CreateInvoicePage() {
                     type="button"
                     disabled={qtyToAdd > selectedProductToAdd.stock}
                     onClick={handleAddItemToInvoice}
-                    className="px-4 py-1.5 bg-[#c51f2a] hover:bg-[#a81922] text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-40 shadow-xs"
+                    className="px-4 py-1.5 bg-[#5c341f] hover:bg-[#472716] text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-40 shadow-xs"
                   >
                     + Add to Invoice
                   </button>
@@ -1011,14 +966,14 @@ export default function CreateInvoicePage() {
               <button
                 type="button"
                 onClick={handleAddManualRow}
-                className="text-xs font-bold text-[#c51f2a] hover:underline flex items-center gap-1"
+                className="text-xs font-bold text-[#5c341f] hover:underline flex items-center gap-1"
               >
                 + Add Custom Service Row
               </button>
             </div>
 
             {/* Editable Items Table */}
-            <div className="border border-gray-200 rounded-xl overflow-hidden shadow-xs">
+            <div className="border border-[#ede5dd] rounded-xl overflow-hidden shadow-xs">
               <table className="w-full text-left text-xs">
                 <thead className="bg-gray-50 text-[10px] font-bold text-gray-500 uppercase border-b">
                   <tr>
@@ -1042,10 +997,10 @@ export default function CreateInvoicePage() {
                             <img
                               src={it.image}
                               alt=""
-                              className="w-9 h-9 rounded-lg object-cover border border-gray-200 shadow-xs flex-shrink-0"
+                              className="w-9 h-9 rounded-lg object-cover border border-[#ede5dd] shadow-xs flex-shrink-0"
                             />
                           ) : (
-                            <div className="w-9 h-9 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center text-xs flex-shrink-0">
+                            <div className="w-9 h-9 rounded-lg bg-gray-100 border border-[#ede5dd] flex items-center justify-center text-xs flex-shrink-0">
                               📦
                             </div>
                           )}
@@ -1054,7 +1009,7 @@ export default function CreateInvoicePage() {
                             value={it.product_name}
                             onChange={(e) => handleUpdateItem(idx, "product_name", e.target.value)}
                             placeholder="Product Name"
-                            className="w-full px-2.5 py-1 border border-gray-200 rounded-lg font-bold text-gray-900 text-xs focus:ring-1 focus:ring-red-400 outline-none"
+                            className="w-full px-2.5 py-1 border border-[#ede5dd] rounded-lg font-bold text-gray-900 text-xs focus:ring-1 focus:ring-red-400 outline-none"
                           />
                         </div>
                         <textarea
@@ -1062,7 +1017,7 @@ export default function CreateInvoicePage() {
                           value={it.description}
                           onChange={(e) => handleUpdateItem(idx, "description", e.target.value)}
                           placeholder="Product Description (features, specs, vehicle compatibility)..."
-                          className="w-full px-2.5 py-1 border border-gray-200 rounded-lg text-[11px] text-gray-600 resize-none focus:ring-1 focus:ring-red-400 outline-none"
+                          className="w-full px-2.5 py-1 border border-[#ede5dd] rounded-lg text-[11px] text-gray-600 resize-none focus:ring-1 focus:ring-red-400 outline-none"
                         />
                       </td>
                       <td className="py-2.5 px-3 text-right align-top pt-3">
@@ -1071,7 +1026,7 @@ export default function CreateInvoicePage() {
                           min="0"
                           value={it.unit_price}
                           onChange={(e) => handleUpdateItem(idx, "unit_price", e.target.value)}
-                          className="w-24 px-2 py-1 border border-gray-200 rounded-lg text-right font-medium text-xs"
+                          className="w-24 px-2 py-1 border border-[#ede5dd] rounded-lg text-right font-medium text-xs"
                         />
                       </td>
                       <td className="py-2.5 px-3 text-center align-top pt-3">
@@ -1080,7 +1035,7 @@ export default function CreateInvoicePage() {
                           min="1"
                           value={it.quantity}
                           onChange={(e) => handleUpdateItem(idx, "quantity", e.target.value)}
-                          className="w-14 px-1.5 py-1 border border-gray-200 rounded-lg text-center font-bold text-xs"
+                          className="w-14 px-1.5 py-1 border border-[#ede5dd] rounded-lg text-center font-bold text-xs"
                         />
                       </td>
                       <td className="py-2.5 px-3 text-right font-black text-gray-900 align-top pt-3 text-xs font-mono">
@@ -1104,7 +1059,7 @@ export default function CreateInvoicePage() {
           </div>
 
           {/* SECTION 4: PAYMENT INFO & TERMS */}
-          <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-xs space-y-4">
+          <div className="bg-white p-5 rounded-2xl border border-[#ede5dd]/80 shadow-xs space-y-4">
             <div className="flex justify-between items-center border-b pb-2">
               <h2 className="text-xs font-black text-gray-900 uppercase tracking-wider flex items-center gap-2">
                 <span className="w-5 h-5 rounded-full bg-[#76c816] text-white flex items-center justify-center font-bold text-[10px]">
@@ -1124,7 +1079,7 @@ export default function CreateInvoicePage() {
                   value={bankName}
                   onChange={(e) => setBankName(e.target.value)}
                   placeholder="e.g. Bank of Georgia"
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg"
+                  className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg"
                 />
               </div>
 
@@ -1137,7 +1092,7 @@ export default function CreateInvoicePage() {
                   value={accountNumber}
                   onChange={(e) => setAccountNumber(e.target.value)}
                   placeholder="e.g. 56-67892"
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg font-mono"
+                  className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg font-mono"
                 />
               </div>
 
@@ -1150,7 +1105,7 @@ export default function CreateInvoicePage() {
                   value={refIfsc}
                   onChange={(e) => setRefIfsc(e.target.value)}
                   placeholder="e.g. 0145 76590"
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg font-mono"
+                  className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg font-mono"
                 />
               </div>
 
@@ -1163,14 +1118,14 @@ export default function CreateInvoicePage() {
                   value={termsText}
                   onChange={(e) => setTermsText(e.target.value)}
                   placeholder="Payment and warranty terms..."
-                  className="w-full p-2.5 text-xs border border-gray-200 rounded-lg"
+                  className="w-full p-2.5 text-xs border border-[#ede5dd] rounded-lg"
                 />
               </div>
             </div>
           </div>
 
           {/* SECTION 5: COMPANY INFO (SIDDHIVINAYAK ENTERPRISE DETAILS) */}
-          <div className="bg-white p-5 rounded-2xl border border-gray-200/80 shadow-xs space-y-4">
+          <div className="bg-white p-5 rounded-2xl border border-[#ede5dd]/80 shadow-xs space-y-4">
             <div className="flex justify-between items-center border-b pb-2">
               <h2 className="text-xs font-black text-gray-900 uppercase tracking-wider flex items-center gap-2">
                 <span className="w-5 h-5 rounded-full bg-[#76c816] text-white flex items-center justify-center font-bold text-[10px]">
@@ -1190,7 +1145,7 @@ export default function CreateInvoicePage() {
                   type="text"
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg font-bold"
+                  className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg font-bold"
                 />
               </div>
 
@@ -1202,7 +1157,7 @@ export default function CreateInvoicePage() {
                   type="text"
                   value={companyTagline}
                   onChange={(e) => setCompanyTagline(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg"
+                  className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg"
                 />
               </div>
 
@@ -1214,7 +1169,7 @@ export default function CreateInvoicePage() {
                   type="text"
                   value={companyPhone}
                   onChange={(e) => setCompanyPhone(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg"
+                  className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg"
                 />
               </div>
 
@@ -1226,7 +1181,7 @@ export default function CreateInvoicePage() {
                   type="email"
                   value={companyEmail}
                   onChange={(e) => setCompanyEmail(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg"
+                  className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg"
                 />
               </div>
 
@@ -1238,7 +1193,7 @@ export default function CreateInvoicePage() {
                   type="text"
                   value={companyWebsite}
                   onChange={(e) => setCompanyWebsite(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg"
+                  className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg"
                 />
               </div>
 
@@ -1250,7 +1205,7 @@ export default function CreateInvoicePage() {
                   type="text"
                   value={companyGstin}
                   onChange={(e) => setCompanyGstin(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg font-mono font-bold"
+                  className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg font-mono font-bold"
                 />
               </div>
 
@@ -1262,7 +1217,7 @@ export default function CreateInvoicePage() {
                   type="text"
                   value={companyAddress}
                   onChange={(e) => setCompanyAddress(e.target.value)}
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-lg"
+                  className="w-full px-3 py-1.5 border border-[#ede5dd] rounded-lg"
                 />
               </div>
             </div>
@@ -1281,7 +1236,7 @@ export default function CreateInvoicePage() {
             </span>
 
             {/* Zoom Scaling Controls */}
-            <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-xl border border-gray-200 shadow-xs">
+            <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-xl border border-[#ede5dd] shadow-xs">
               <span className="text-[10px] font-bold text-gray-400">Zoom:</span>
               <button
                 type="button"
@@ -1389,7 +1344,7 @@ export default function CreateInvoicePage() {
               <div className="flex-1 px-10 pt-5 pb-2 flex flex-col justify-between">
                 <div>
                   {/* "Billed to" & Invoice Meta Grid */}
-                  <div className="grid grid-cols-12 gap-3 mb-4 pb-3 border-b border-gray-200">
+                  <div className="grid grid-cols-12 gap-3 mb-4 pb-3 border-b border-[#ede5dd]">
                     {/* Left: Customer Info */}
                     <div className="col-span-7 bg-slate-50/70 p-3 rounded-xl border border-slate-200/80">
                       <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-slate-200">
@@ -1488,7 +1443,7 @@ export default function CreateInvoicePage() {
                             <td className="py-2 px-4 border-r border-gray-300 align-top">
                               <div className="flex items-start gap-3">
                                 {it.image ? (
-                                  <div className="w-10 h-10 rounded-lg border border-gray-200 bg-white overflow-hidden flex-shrink-0 shadow-xs flex items-center justify-center">
+                                  <div className="w-10 h-10 rounded-lg border border-[#ede5dd] bg-white overflow-hidden flex-shrink-0 shadow-xs flex items-center justify-center">
                                     <img
                                       src={it.image}
                                       alt={it.product_name}
