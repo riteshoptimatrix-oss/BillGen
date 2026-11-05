@@ -1,11 +1,34 @@
+const PRODUCTION_API_URL = "https://billgen-32uc.onrender.com/api";
+const PRODUCTION_SERVER_ORIGIN = "https://billgen-32uc.onrender.com";
+
 /**
  * Dynamic API URL resolver and secure authentication utility.
  * When the app is accessed on mobile / LAN (e.g. http://192.168.1.14:3000),
- * it dynamically targets http://192.168.1.14:8000/api instead of trying to hit localhost
- * on the mobile device itself.
+ * it dynamically targets http://192.168.1.14:8000/api.
+ * In production (Netlify or custom domain), it targets the live Render backend.
  */
 export function getApiUrl(): string {
-  // If NEXT_PUBLIC_API_URL is configured (e.g. deployed to Netlify), use it
+  // 1. If running in the browser:
+  if (typeof window !== "undefined") {
+    const { hostname } = window.location;
+    const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
+    const isPrivateIp = /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(hostname);
+
+    // If deployed on Netlify or any public domain (not localhost and not private LAN IP)
+    if (!isLocalhost && !isPrivateIp) {
+      if (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes("localhost")) {
+        return process.env.NEXT_PUBLIC_API_URL.trim();
+      }
+      return PRODUCTION_API_URL;
+    }
+
+    // Local LAN / mobile testing
+    if (isPrivateIp) {
+      return `http://${hostname}:8000/api`;
+    }
+  }
+
+  // 2. If explicitly configured in environment variables and points to a remote server
   if (process.env.NEXT_PUBLIC_API_URL) {
     const envUrl = process.env.NEXT_PUBLIC_API_URL.trim();
     if (!envUrl.includes("localhost") && !envUrl.includes("127.0.0.1")) {
@@ -13,25 +36,26 @@ export function getApiUrl(): string {
     }
   }
 
-  // Fallback for local LAN / mobile testing during local development
-  if (typeof window !== "undefined") {
-    const { hostname } = window.location;
-    const isPrivateIp = /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(hostname);
-    if (isPrivateIp) {
-      return `http://${hostname}:8000/api`;
-    }
-  }
   return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 }
 
 /**
- * Adjusts image and file URLs that point to localhost so they load properly on mobile/LAN devices.
+ * Adjusts image and file URLs that point to localhost so they load properly on mobile/LAN devices and production.
  */
 export function formatImageUrl(url?: string): string {
   if (!url) return "";
   if (typeof window !== "undefined") {
     const { hostname } = window.location;
+    const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
     const isPrivateIp = /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(hostname);
+
+    // In production (Netlify), replace localhost URLs with production backend URL
+    if (!isLocalhost && !isPrivateIp) {
+      return url
+        .replace("http://localhost:8000", PRODUCTION_SERVER_ORIGIN)
+        .replace("http://127.0.0.1:8000", PRODUCTION_SERVER_ORIGIN);
+    }
+
     if (isPrivateIp) {
       return url.replace("://localhost:", `://${hostname}:`).replace("://127.0.0.1:", `://${hostname}:`);
     }
