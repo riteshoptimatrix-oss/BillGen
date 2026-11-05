@@ -1,14 +1,18 @@
-from fastapi import APIRouter, Body, Request, HTTPException, status
+from fastapi import APIRouter, Body, Request, HTTPException, status, Depends
 from fastapi.responses import JSONResponse
-from fastapi.encoders import jsonable_encoder
-from typing import List
+from typing import List, Dict, Any
 from models import Customer, CustomerCreate, CustomerUpdate
 from bson import ObjectId
+from security import get_current_user
 
 router = APIRouter(prefix="/api/customers", tags=["customers"])
 
 @router.post("/", response_description="Add new customer", status_code=status.HTTP_201_CREATED, response_model=Customer)
-async def create_customer(request: Request, customer: CustomerCreate = Body(...)):
+async def create_customer(
+    request: Request,
+    customer: CustomerCreate = Body(...),
+    user: Dict[str, Any] = Depends(get_current_user)
+):
     customer_dict = customer.model_dump()
     new_customer = await request.app.mongodb["customers"].insert_one(customer_dict)
     created_customer = await request.app.mongodb["customers"].find_one(
@@ -23,12 +27,21 @@ async def list_customers(request: Request):
 
 @router.get("/{id}", response_description="Get a single customer", response_model=Customer)
 async def show_customer(id: str, request: Request):
+    if not ObjectId.is_valid(id):
+        raise HTTPException(status_code=400, detail="Invalid Customer ID format")
     if (customer := await request.app.mongodb["customers"].find_one({"_id": ObjectId(id)})) is not None:
         return customer
     raise HTTPException(status_code=404, detail=f"Customer {id} not found")
 
 @router.put("/{id}", response_description="Update a customer", response_model=Customer)
-async def update_customer(id: str, request: Request, customer: CustomerUpdate = Body(...)):
+async def update_customer(
+    id: str,
+    request: Request,
+    customer: CustomerUpdate = Body(...),
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    if not ObjectId.is_valid(id):
+        raise HTTPException(status_code=400, detail="Invalid Customer ID format")
     customer_dict = {k: v for k, v in customer.model_dump().items() if v is not None}
 
     if len(customer_dict) >= 1:
@@ -48,7 +61,13 @@ async def update_customer(id: str, request: Request, customer: CustomerUpdate = 
     raise HTTPException(status_code=404, detail=f"Customer {id} not found")
 
 @router.delete("/{id}", response_description="Delete a customer")
-async def delete_customer(id: str, request: Request):
+async def delete_customer(
+    id: str,
+    request: Request,
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    if not ObjectId.is_valid(id):
+        raise HTTPException(status_code=400, detail="Invalid Customer ID format")
     delete_result = await request.app.mongodb["customers"].delete_one({"_id": ObjectId(id)})
 
     if delete_result.deleted_count == 1:

@@ -2,20 +2,46 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { getApiUrl, setAuthToken } from "@/lib/api";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email === "ritesh.work.1510@gmail.com" && password === "8980614160@.com") {
-      localStorage.setItem("isAuthenticated", "true");
+    setError("");
+    setIsLoading(true);
+
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          email: email.trim(),
+          password: password
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || "Invalid credentials. Please verify and try again.");
+      }
+
+      // Store cryptographically signed JWT token
+      if (data.token) {
+        setAuthToken(data.token);
+      }
       router.push("/dashboard");
-    } else {
-      setError("Invalid credentials. Please try again.");
+    } catch (err: any) {
+      setError(err.message || "Failed to establish secure session. Please check your connection.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -179,12 +205,22 @@ export default function LoginPage() {
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-xs text-sm font-bold text-white bg-[#0260de] hover:bg-[#0252bf] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0260de] transition-colors mt-4 active:scale-95 cursor-pointer"
+              disabled={isLoading}
+              className="w-full flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl shadow-xs text-sm font-bold text-white bg-[#0260de] hover:bg-[#0252bf] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0260de] transition-all mt-4 active:scale-95 disabled:opacity-60 cursor-pointer"
             >
-              Sign in to Dashboard
-              <svg className="ml-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-              </svg>
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                  <span>Verifying credentials...</span>
+                </>
+              ) : (
+                <>
+                  <span>Sign in to Dashboard</span>
+                  <svg className="ml-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                  </svg>
+                </>
+              )}
             </button>
           </form>
 

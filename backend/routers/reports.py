@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Request, Query
+from fastapi import APIRouter, Request, Query, Depends
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, date
+from security import get_current_user
 
-router = APIRouter(prefix="/api/reports", tags=["reports"])
+router = APIRouter(prefix="/api/reports", tags=["reports"], dependencies=[Depends(get_current_user)])
 
 def filter_records_by_date(records: list, date_field: str, filter_type: Optional[str] = "month", start_date: Optional[str] = None, end_date: Optional[str] = None) -> list:
     if not filter_type or filter_type.lower() == "all":

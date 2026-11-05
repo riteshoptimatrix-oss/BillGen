@@ -1,11 +1,15 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Depends
 from typing import Dict, Any
 from datetime import datetime
+from security import get_current_user
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 @router.get("/summary", response_description="Get dashboard summary data")
-async def get_dashboard_summary(request: Request) -> Dict[str, Any]:
+async def get_dashboard_summary(
+    request: Request,
+    user: Dict[str, Any] = Depends(get_current_user)
+) -> Dict[str, Any]:
     system_alerts = []
     
     # 1. Low stock alerts
@@ -16,8 +20,8 @@ async def get_dashboard_summary(request: Request) -> Dict[str, Any]:
         system_alerts.append({
             "id": f"stock-{product['_id']}",
             "type": "stock",
-            "title": product["name"],
-            "subtitle": f"Only {product['stock']} units left",
+            "title": product.get("name", "Unknown Product"),
+            "subtitle": f"Only {product.get('stock', 0)} units left",
             "actionText": "Restock"
         })
 
@@ -55,7 +59,7 @@ async def get_dashboard_summary(request: Request) -> Dict[str, Any]:
             "date": inv.get("date", "")
         })
 
-    # 3. Labour Salary Due (Assuming all labours need to be paid this month)
+    # 3. Labour Salary Due
     active_labours = await request.app.mongodb["labours"].count_documents({})
     labours_cursor = request.app.mongodb["labours"].find({})
     labours = await labours_cursor.to_list(1000)
@@ -68,18 +72,17 @@ async def get_dashboard_summary(request: Request) -> Dict[str, Any]:
             system_alerts.append({
                 "id": f"labour-{labour['_id']}",
                 "type": "salary",
-                "title": f"Salary: {labour['name']}",
+                "title": f"Salary: {labour.get('name', 'Worker')}",
                 "subtitle": f"₹{salary:,} payment due",
                 "actionText": "Pay Now"
             })
 
     expenses_cursor = request.app.mongodb["expenses"].find({})
     expenses = await expenses_cursor.to_list(1000)
-    total_expenses = sum(exp["amount"] for exp in expenses)
+    total_expenses = sum(exp.get("amount", 0) for exp in expenses)
     
     net_profit = total_revenue - (total_expenses + total_salaries)
     
-    # Monthly Chart Data matching realistic trendline
     chart_data = [
         {"name": "Jan", "Revenue": 10000, "Expenses": 5000},
         {"name": "Feb", "Revenue": 13000, "Expenses": 7000},
@@ -107,6 +110,6 @@ async def get_dashboard_summary(request: Request) -> Dict[str, Any]:
         },
         "chartData": chart_data,
         "expenseDistribution": expense_distribution,
-        "systemAlerts": system_alerts, # Return all alerts for the View All modal
+        "systemAlerts": system_alerts,
         "recentInvoices": recent_invoices
     }

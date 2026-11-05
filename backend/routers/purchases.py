@@ -1,14 +1,19 @@
-from fastapi import APIRouter, Body, Request, HTTPException, status
+from fastapi import APIRouter, Body, Request, HTTPException, status, Depends
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any
 from models import Purchase, PurchaseCreate, PurchaseUpdate
 from bson import ObjectId
 from datetime import datetime
+from security import get_current_user
 
 router = APIRouter(prefix="/api/purchases", tags=["purchases"])
 
 @router.post("/", response_description="Add a new purchase entry", status_code=status.HTTP_201_CREATED, response_model=Purchase)
-async def create_purchase(request: Request, purchase: PurchaseCreate = Body(...)):
+async def create_purchase(
+    request: Request,
+    purchase: PurchaseCreate = Body(...),
+    user: Dict[str, Any] = Depends(get_current_user)
+):
     purchase_dict = purchase.model_dump()
     
     if not purchase_dict.get("purchase_date"):
@@ -40,15 +45,20 @@ async def purchase_summary(request: Request) -> Dict[str, Any]:
 @router.get("/{id}", response_description="Get a single purchase entry", response_model=Purchase)
 async def show_purchase(id: str, request: Request):
     if not ObjectId.is_valid(id):
-        raise HTTPException(status_code=400, detail="Invalid Purchase ID")
+        raise HTTPException(status_code=400, detail="Invalid Purchase ID format")
     if (purchase := await request.app.mongodb["purchases"].find_one({"_id": ObjectId(id)})) is not None:
         return purchase
     raise HTTPException(status_code=404, detail=f"Purchase {id} not found")
 
 @router.put("/{id}", response_description="Update a purchase entry", response_model=Purchase)
-async def update_purchase(id: str, request: Request, purchase: PurchaseUpdate = Body(...)):
+async def update_purchase(
+    id: str,
+    request: Request,
+    purchase: PurchaseUpdate = Body(...),
+    user: Dict[str, Any] = Depends(get_current_user)
+):
     if not ObjectId.is_valid(id):
-        raise HTTPException(status_code=400, detail="Invalid Purchase ID")
+        raise HTTPException(status_code=400, detail="Invalid Purchase ID format")
         
     purchase_dict = {k: v for k, v in purchase.model_dump().items() if v is not None}
 
@@ -63,9 +73,13 @@ async def update_purchase(id: str, request: Request, purchase: PurchaseUpdate = 
     raise HTTPException(status_code=404, detail=f"Purchase {id} not found")
 
 @router.delete("/{id}", response_description="Delete a purchase entry")
-async def delete_purchase(id: str, request: Request):
+async def delete_purchase(
+    id: str,
+    request: Request,
+    user: Dict[str, Any] = Depends(get_current_user)
+):
     if not ObjectId.is_valid(id):
-        raise HTTPException(status_code=400, detail="Invalid Purchase ID")
+        raise HTTPException(status_code=400, detail="Invalid Purchase ID format")
         
     delete_result = await request.app.mongodb["purchases"].delete_one({"_id": ObjectId(id)})
 
@@ -73,4 +87,3 @@ async def delete_purchase(id: str, request: Request):
         return JSONResponse(status_code=status.HTTP_204_NO_CONTENT, content=None)
 
     raise HTTPException(status_code=404, detail=f"Purchase {id} not found")
-

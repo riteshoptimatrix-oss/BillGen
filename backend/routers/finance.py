@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Request, HTTPException, Body
+from fastapi import APIRouter, Request, HTTPException, Body, Depends, status
 from typing import Dict, Any, List
 from bson import ObjectId
 from datetime import datetime
+from security import get_current_user
 
 router = APIRouter(prefix="/api/finance", tags=["finance"])
 
@@ -18,8 +19,8 @@ async def get_finance_overview(request: Request) -> Dict[str, Any]:
     for inv in invoices:
         amt = float(inv.get("amount", 0.0))
         total_sales += amt
-        status = inv.get("status", "Pending")
-        if status == "Paid":
+        status_val = inv.get("status", "Pending")
+        if status_val == "Paid":
             paid_sales += amt
         else:
             pending_sales += amt
@@ -35,8 +36,8 @@ async def get_finance_overview(request: Request) -> Dict[str, Any]:
     for p in purchases:
         amt = float(p.get("amount", 0.0))
         total_purchases += amt
-        status = p.get("status", "Paid")
-        if status == "Paid":
+        status_val = p.get("status", "Paid")
+        if status_val == "Paid":
             paid_purchases += amt
         else:
             pending_purchases += amt
@@ -57,7 +58,6 @@ async def get_finance_overview(request: Request) -> Dict[str, Any]:
 
 @router.get("/sales", response_description="Get all Sales records derived directly from Invoices")
 async def get_sales_records(request: Request) -> List[Dict[str, Any]]:
-    # Invoices directly represent sales records - guarantees no duplicate manual entry
     invoices = await request.app.mongodb["invoices"].find().sort("_id", -1).to_list(1000)
     current_year = datetime.now().year
     
@@ -83,13 +83,22 @@ async def get_sales_records(request: Request) -> List[Dict[str, Any]]:
     return sales_records
 
 @router.patch("/sales/{id}/status", response_description="Update sales/invoice payment status")
-async def update_sales_status(id: str, request: Request, payload: Dict[str, str] = Body(...)):
+async def update_sales_status(
+    id: str,
+    request: Request,
+    payload: Dict[str, str] = Body(...),
+    user: Dict[str, Any] = Depends(get_current_user)
+):
     if not ObjectId.is_valid(id):
-        raise HTTPException(status_code=400, detail="Invalid ID")
+        raise HTTPException(status_code=400, detail="Invalid Invoice ID format")
         
     new_status = payload.get("status")
-    if not new_status:
-        raise HTTPException(status_code=400, detail="Status is required")
+    allowed_statuses = {"Paid", "Pending", "Overdue", "Cancelled"}
+    if not new_status or new_status not in allowed_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid status value. Must be one of: {', '.join(allowed_statuses)}"
+        )
         
     update_result = await request.app.mongodb["invoices"].update_one(
         {"_id": ObjectId(id)},
@@ -105,4 +114,3 @@ async def update_sales_status(id: str, request: Request, payload: Dict[str, str]
         "status": updated.get("status"),
         "message": "Payment status updated successfully"
     }
-

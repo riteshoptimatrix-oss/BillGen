@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import NavigationProgressBar from "@/components/NavigationProgressBar";
+import { setupSecureFetchInterceptor, getAuthToken, clearAuthToken, getApiUrl } from "@/lib/api";
 
 export default function AuthenticatedLayout({
   children,
@@ -17,11 +18,33 @@ export default function AuthenticatedLayout({
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   useEffect(() => {
-    const auth = localStorage.getItem("isAuthenticated");
-    if (auth !== "true") {
+    // Initialize secure fetch wrapper to transparently inject JWT headers
+    setupSecureFetchInterceptor();
+
+    const token = getAuthToken();
+    const isLegacyAuth = localStorage.getItem("isAuthenticated") === "true";
+
+    if (!token && !isLegacyAuth) {
+      clearAuthToken();
       router.push("/login");
-    } else {
-      setIsAuthorized(true);
+      return;
+    }
+
+    // Verify session state
+    setIsAuthorized(true);
+
+    // Background verify session validity with backend
+    if (token) {
+      fetch(`${getApiUrl()}/auth/me`)
+        .then((res) => {
+          if (!res.ok && res.status === 401) {
+            clearAuthToken();
+            router.push("/login");
+          }
+        })
+        .catch(() => {
+          // Allow offline or transient network operations
+        });
     }
   }, [router]);
 
