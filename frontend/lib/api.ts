@@ -40,27 +40,59 @@ export function getApiUrl(): string {
 }
 
 /**
- * Adjusts image and file URLs that point to localhost so they load properly on mobile/LAN devices and production.
+ * Robust Image and File URL Formatter.
+ * Ensures images resolve correctly whether accessed on:
+ * - Localhost
+ * - Mobile / LAN private IPs (e.g. 192.168.x.x)
+ * - Live Netlify production targeting Render backend
+ * Handles relative paths (/uploads/..), http/https mixed content, and localhost URLs.
  */
 export function formatImageUrl(url?: string): string {
-  if (!url) return "";
+  if (!url || typeof url !== "string") return "";
+  let cleanUrl = url.trim();
+  if (!cleanUrl) return "";
+
+  // 1. If it's a relative path (e.g. /uploads/image.jpg or uploads/image.jpg)
+  if (cleanUrl.startsWith("/uploads/") || cleanUrl.startsWith("uploads/")) {
+    const relativePath = cleanUrl.startsWith("/") ? cleanUrl : `/${cleanUrl}`;
+    if (typeof window !== "undefined") {
+      const { hostname } = window.location;
+      const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
+      const isPrivateIp = /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(hostname);
+      if (isLocalhost) return `http://localhost:8000${relativePath}`;
+      if (isPrivateIp) return `http://${hostname}:8000${relativePath}`;
+    }
+    return `${PRODUCTION_SERVER_ORIGIN}${relativePath}`;
+  }
+
+  // 2. If it points to localhost / 127.0.0.1
   if (typeof window !== "undefined") {
     const { hostname } = window.location;
     const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
     const isPrivateIp = /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(hostname);
 
-    // In production (Netlify), replace localhost URLs with production backend URL
     if (!isLocalhost && !isPrivateIp) {
-      return url
-        .replace("http://localhost:8000", PRODUCTION_SERVER_ORIGIN)
-        .replace("http://127.0.0.1:8000", PRODUCTION_SERVER_ORIGIN);
+      // In production (Netlify), replace localhost with production Render backend URL
+      cleanUrl = cleanUrl
+        .replace(/^https?:\/\/localhost(:\d+)?/i, PRODUCTION_SERVER_ORIGIN)
+        .replace(/^https?:\/\/127\.0\.0\.1(:\d+)?/i, PRODUCTION_SERVER_ORIGIN);
+    } else if (isPrivateIp) {
+      cleanUrl = cleanUrl
+        .replace(/:\/\/localhost:\d+/i, `://${hostname}:8000`)
+        .replace(/:\/\/127\.0\.0\.1:\d+/i, `://${hostname}:8000`);
     }
-
-    if (isPrivateIp) {
-      return url.replace("://localhost:", `://${hostname}:`).replace("://127.0.0.1:", `://${hostname}:`);
-    }
+  } else {
+    cleanUrl = cleanUrl
+      .replace(/^https?:\/\/localhost(:\d+)?/i, PRODUCTION_SERVER_ORIGIN)
+      .replace(/^https?:\/\/127\.0\.0\.1(:\d+)?/i, PRODUCTION_SERVER_ORIGIN);
   }
-  return url;
+
+  // 3. Prevent Mixed Content block on HTTPS (e.g. Netlify loading http:// on Render)
+  if (cleanUrl.includes("onrender.com")) {
+    cleanUrl = cleanUrl.replace(/^http:\/\//i, "https://");
+  }
+
+  return cleanUrl;
 }
 
 /**

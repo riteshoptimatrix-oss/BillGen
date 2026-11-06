@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { getApiUrl } from "@/lib/api";
+import { getApiUrl, formatImageUrl } from "@/lib/api";
 import { exportElementToPDF } from "@/lib/pdf";
 
 interface InvoiceItem {
@@ -246,7 +246,7 @@ export default function CreateInvoicePage() {
       item_no: newItemNo,
       product_name: selectedProductToAdd.name,
       description: selectedProductToAdd.description || selectedProductToAdd.name,
-      image: selectedProductToAdd.image || "",
+      image: formatImageUrl(selectedProductToAdd.image) || "",
       quantity: qty,
       unit_price: selectedProductToAdd.price,
       total: qty * selectedProductToAdd.price
@@ -393,7 +393,7 @@ export default function CreateInvoicePage() {
           item_no: it.item_no,
           product_name: it.product_name,
           description: it.description,
-          image: it.image,
+          image: formatImageUrl(it.image),
           quantity: it.quantity,
           unit_price: it.unit_price,
           total: it.total
@@ -848,13 +848,14 @@ export default function CreateInvoicePage() {
                   >
                     <div className="w-12 h-12 rounded-xl bg-gray-50 border border-[#e2e8f0] flex items-center justify-center overflow-hidden flex-shrink-0">
                       {prod.image ? (
-                        <Image
-                          src={prod.image}
+                        <img
+                          src={formatImageUrl(prod.image)}
                           alt={prod.name}
-                          width={48}
-                          height={48}
+                          crossOrigin="anonymous"
                           className="w-full h-full object-cover"
-                          unoptimized
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = "none";
+                          }}
                         />
                       ) : (
                         <span className="text-gray-300 text-xs font-bold">📦</span>
@@ -971,9 +972,13 @@ export default function CreateInvoicePage() {
                         <div className="flex items-center gap-2.5">
                           {it.image ? (
                             <img
-                              src={it.image}
+                              src={formatImageUrl(it.image)}
                               alt=""
+                              crossOrigin="anonymous"
                               className="w-9 h-9 rounded-lg object-cover border border-[#e2e8f0] shadow-xs flex-shrink-0"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = "none";
+                              }}
                             />
                           ) : (
                             <div className="w-9 h-9 rounded-lg bg-gray-100 border border-[#e2e8f0] flex items-center justify-center text-xs flex-shrink-0">
@@ -1427,9 +1432,14 @@ export default function CreateInvoicePage() {
                                 {it.image ? (
                                   <div className="w-10 h-10 rounded-lg border border-[#e2e8f0] bg-white overflow-hidden flex-shrink-0 shadow-xs flex items-center justify-center">
                                     <img
-                                      src={it.image}
+                                      src={formatImageUrl(it.image)}
                                       alt={it.product_name}
+                                      crossOrigin="anonymous"
                                       className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        const p = (e.target as HTMLElement).parentElement;
+                                        if (p) p.innerHTML = '<span class="text-xs">📦</span>';
+                                      }}
                                     />
                                   </div>
                                 ) : (

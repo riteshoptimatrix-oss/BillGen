@@ -531,7 +531,7 @@ export default function BillInvoicePage() {
         unit_price: selectedProductToAdd.price,
         tax_rate: formTaxRate,
         total: lineTotal,
-        image: selectedProductToAdd.image
+        image: formatImageUrl(selectedProductToAdd.image)
       };
       setItems([...items, newItem]);
     }
@@ -702,7 +702,10 @@ export default function BillInvoicePage() {
         payment_method: formPaymentMethod,
         place_of_supply: formPlaceOfSupply,
 
-        items,
+        items: items.map((it) => ({
+          ...it,
+          image: formatImageUrl(it.image),
+        })),
         subtotal: calculations.subtotal,
         discount_amount: calculations.discount,
         tax_percent: formTaxRate,
@@ -1316,13 +1319,11 @@ export default function BillInvoicePage() {
                       {selectedProductToAdd ? (
                         <div className="flex items-center gap-2 truncate">
                           {selectedProductToAdd.image ? (
-                            <Image
-                              src={selectedProductToAdd.image}
+                            <img
+                              src={formatImageUrl(selectedProductToAdd.image)}
                               alt=""
-                              width={24}
-                              height={24}
+                              crossOrigin="anonymous"
                               className="w-6 h-6 object-cover rounded border border-[#e2e8f0] flex-shrink-0"
-                              unoptimized
                             />
                           ) : (
                             <div className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center text-[10px] text-gray-400 font-bold flex-shrink-0">
@@ -1399,13 +1400,11 @@ export default function BillInvoicePage() {
                                 >
                                   <div className="flex items-center gap-2.5 min-w-0">
                                     {prod.image ? (
-                                      <Image
-                                        src={prod.image}
+                                      <img
+                                        src={formatImageUrl(prod.image)}
                                         alt=""
-                                        width={32}
-                                        height={32}
+                                        crossOrigin="anonymous"
                                         className="w-8 h-8 object-cover rounded-lg border border-[#e2e8f0] flex-shrink-0"
-                                        unoptimized
                                       />
                                     ) : (
                                       <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] text-gray-400 font-bold flex-shrink-0">
@@ -1516,13 +1515,14 @@ export default function BillInvoicePage() {
                           <tr key={idx} className="hover:bg-gray-50/50">
                             <td className="py-2.5 px-3 font-semibold text-gray-900 flex items-center gap-2">
                               {it.image ? (
-                                <Image
-                                  src={it.image}
+                                <img
+                                  src={formatImageUrl(it.image)}
                                   alt=""
-                                  width={28}
-                                  height={28}
-                                  className="w-7 h-7 object-cover rounded border"
-                                  unoptimized
+                                  crossOrigin="anonymous"
+                                  className="w-7 h-7 object-cover rounded border border-[#e2e8f0]"
+                                  onError={(e) => {
+                                    (e.target as HTMLElement).style.display = "none";
+                                  }}
                                 />
                               ) : null}
                               <span>{it.description}</span>
@@ -2149,9 +2149,16 @@ export default function BillInvoicePage() {
                             <div className="flex items-start gap-3">
                               {it.image ? (
                                 <img
-                                  src={it.image}
+                                  src={formatImageUrl(it.image)}
                                   alt=""
+                                  crossOrigin="anonymous"
                                   className="w-10 h-10 object-cover rounded-lg border border-[#e2e8f0] flex-shrink-0"
+                                  onError={(e) => {
+                                    const parent = (e.target as HTMLElement).parentElement;
+                                    if (parent) {
+                                      parent.innerHTML = '<div class="w-10 h-10 rounded-lg bg-gray-100 border border-[#e2e8f0] flex items-center justify-center text-xs flex-shrink-0">📦</div>';
+                                    }
+                                  }}
                                 />
                               ) : (
                                 <div className="w-10 h-10 rounded-lg bg-gray-100 border border-[#e2e8f0] flex items-center justify-center text-xs flex-shrink-0">

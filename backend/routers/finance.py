@@ -110,7 +110,23 @@ async def update_sales_status(
     if update_result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Invoice record not found")
         
-    updated = await request.app.mongodb["invoices"].find_one({"_id": ObjectId(id)})
+    updated = await request.app.mongodb["invoices"].find_one({"_id": ObjectId(id)}, {"pdf_base64": 0})
+    
+    # Real-Time Broadcast Notification
+    try:
+        from routers.notifications import broadcast_notification
+        inv_num = updated.get("invoice_number", f"INV-{id[-4:].upper()}")
+        client_name = updated.get("client", "Customer")
+        await broadcast_notification(
+            request.app.mongodb,
+            title=f"Payment Status: {inv_num}",
+            message=f"Invoice for {client_name} marked as {new_status}",
+            type="payment" if new_status == "Paid" else "invoice",
+            link="/finance"
+        )
+    except Exception:
+        pass
+
     return {
         "id": str(updated["_id"]),
         "status": updated.get("status"),

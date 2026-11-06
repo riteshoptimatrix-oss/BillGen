@@ -155,11 +155,41 @@ async def create_invoice(
                         {"_id": ObjectId(prod_id)},
                         {"$inc": {"stock": -qty}}
                     )
+                    # Check low stock threshold
+                    updated_prod = await request.app.mongodb["products"].find_one({"_id": ObjectId(prod_id)})
+                    if updated_prod and updated_prod.get("stock", 0) < 10:
+                        try:
+                            from routers.notifications import broadcast_notification
+                            await broadcast_notification(
+                                request.app.mongodb,
+                                title=f"Low Stock Alert: {updated_prod.get('name')}",
+                                message=f"Only {updated_prod.get('stock')} units left in stock! Restock advised.",
+                                type="stock",
+                                link="/products"
+                            )
+                        except Exception:
+                            pass
                 elif item.get("description"):
                     await request.app.mongodb["products"].update_one(
                         {"name": item.get("description")},
                         {"$inc": {"stock": -qty}}
                     )
+
+    # Real-Time Broadcast Notification for newly created invoice
+    try:
+        from routers.notifications import broadcast_notification
+        inv_num = created_invoice.get("invoice_number", "INV")
+        client_name = created_invoice.get("client", "Customer")
+        amt = created_invoice.get("amount", 0)
+        await broadcast_notification(
+            request.app.mongodb,
+            title=f"New Invoice Created: {inv_num}",
+            message=f"Invoice for ₹{amt:,.2f} generated for {client_name}",
+            type="invoice",
+            link="/bill-invoice"
+        )
+    except Exception:
+        pass
 
     return created_invoice
 
@@ -211,9 +241,22 @@ async def update_invoice(
         )
 
     if (updated_invoice := await request.app.mongodb["invoices"].find_one({"_id": ObjectId(id)}, {"pdf_base64": 0})) is not None:
+        if "status" in invoice_dict:
+            try:
+                from routers.notifications import broadcast_notification
+                st = updated_invoice.get("status", "Updated")
+                inv_num = updated_invoice.get("invoice_number", f"INV-{id[-4:].upper()}")
+                client_name = updated_invoice.get("client", "Customer")
+                await broadcast_notification(
+                    request.app.mongodb,
+                    title=f"Invoice Status: {inv_num}",
+                    message=f"Invoice for {client_name} marked as {st}",
+                    type="payment" if st == "Paid" else "invoice",
+                    link="/bill-invoice"
+                )
+            except Exception:
+                pass
         return updated_invoice
-
-    raise HTTPException(status_code=404, detail=f"Invoice {id} not found")
 
     raise HTTPException(status_code=404, detail=f"Invoice {id} not found")
 

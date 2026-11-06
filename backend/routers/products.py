@@ -62,6 +62,22 @@ async def create_product(
     created_product = await request.app.mongodb["products"].find_one(
         {"_id": new_product.inserted_id}
     )
+
+    # Real-Time Broadcast Notification
+    try:
+        from routers.notifications import broadcast_notification
+        p_name = created_product.get("name", "Product")
+        stock_cnt = created_product.get("stock", 0)
+        await broadcast_notification(
+            request.app.mongodb,
+            title=f"New Product Added: {p_name}",
+            message=f"Added to catalog with {stock_cnt} units stock",
+            type="stock",
+            link="/products"
+        )
+    except Exception:
+        pass
+
     return created_product
 
 @router.get("/", response_description="List all products", response_model=List[Product])

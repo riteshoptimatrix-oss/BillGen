@@ -32,7 +32,8 @@ from routers import (
     invoices,
     purchases,
     finance,
-    reports
+    reports,
+    notifications
 )
 
 # Load environment configuration
@@ -87,6 +88,8 @@ async def lifespan(app: FastAPI):
         await app.mongodb["purchases"].create_index([("status", 1)], background=True)
         await app.mongodb["purchases"].create_index([("supplier_name", 1)], background=True)
         await app.mongodb["expenses"].create_index([("date", -1)], background=True)
+        await app.mongodb["notifications"].create_index([("created_at", -1)], background=True)
+        await app.mongodb["notifications"].create_index([("is_read", 1)], background=True)
         logger.info("MongoDB Atlas performance indexes verified/initialized.")
     except Exception as idx_err:
         logger.warning(f"MongoDB Atlas index notice: {idx_err}")
@@ -240,6 +243,7 @@ app.include_router(invoices.router)
 app.include_router(purchases.router)
 app.include_router(finance.router)
 app.include_router(reports.router)
+app.include_router(notifications.router)
 
 # ==============================================================================
 # 5. AUTHENTICATION SCHEMAS & ENDPOINTS

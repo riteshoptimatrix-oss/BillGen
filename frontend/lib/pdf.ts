@@ -26,9 +26,25 @@ async function preparePDFDoc(element: HTMLElement): Promise<{ pdf: jsPDF } | nul
   document.body.appendChild(clone);
 
   try {
+    // Ensure all images in clone have crossOrigin and are fully preloaded
+    const cloneImgs = Array.from(clone.querySelectorAll("img"));
+    await Promise.all(
+      cloneImgs.map((img) => {
+        img.crossOrigin = "anonymous";
+        if (img.complete && img.naturalHeight !== 0) return Promise.resolve();
+        return new Promise<void>((resolve) => {
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+          // Timeout after 1.5 seconds so PDF generation proceeds smoothly even on slow networks
+          setTimeout(resolve, 1500);
+        });
+      })
+    );
+
     const canvas = await html2canvas(clone, {
       scale: 2,
       useCORS: true,
+      allowTaint: true,
       logging: false,
       scrollY: 0,
       scrollX: 0,
@@ -40,6 +56,11 @@ async function preparePDFDoc(element: HTMLElement): Promise<{ pdf: jsPDF } | nul
         if (el) {
           el.style.backgroundColor = "#ffffff";
         }
+        // Force crossOrigin on all cloned image elements
+        const imgs = clonedDoc.querySelectorAll("img");
+        imgs.forEach((img) => {
+          img.crossOrigin = "anonymous";
+        });
       },
     });
 

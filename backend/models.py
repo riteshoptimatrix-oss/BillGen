@@ -304,3 +304,22 @@ class Customer(CustomerBase):
         populate_by_name=True,
         arbitrary_types_allowed=True,
     )
+
+class NotificationBase(BaseModel):
+    title: str
+    message: str
+    type: Optional[str] = "info"  # "invoice", "payment", "stock", "purchase", "customer", "warning", "info"
+    link: Optional[str] = None
+    is_read: Optional[bool] = False
+    created_at: Optional[str] = None
+
+class NotificationCreate(NotificationBase):
+    pass
+
+class Notification(NotificationBase):
+    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+    )

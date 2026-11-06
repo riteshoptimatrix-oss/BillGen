@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import NavigationProgressBar from "@/components/NavigationProgressBar";
+import NotificationCenter from "@/components/NotificationCenter";
 import { setupSecureFetchInterceptor, getAuthToken, clearAuthToken, isTokenValid, getApiUrl } from "@/lib/api";
 
 export default function AuthenticatedLayout({
@@ -111,11 +112,22 @@ export default function AuthenticatedLayout({
             <span>+ Bill</span>
           </Link>
 
+          <NotificationCenter />
+
           <div className="w-10 h-10 rounded-2xl bg-blue-50 text-[#0260de] font-bold text-xs sm:text-sm flex items-center justify-center border border-blue-200 shrink-0">
             SV
           </div>
         </div>
       </header>
+
+      {/* ==================================================================== */}
+      {/* DESKTOP NOTIFICATION DOCK (Active on all pages except dashboard)     */}
+      {/* ==================================================================== */}
+      {pathname !== "/dashboard" && (
+        <div className="hidden lg:flex fixed top-4 right-8 z-40 items-center gap-3">
+          <NotificationCenter />
+        </div>
+      )}
 
       {/* ==================================================================== */}
       {/* MAIN CONTENT WRAPPER: Padded by header height on mobile, 0 on desktop*/}

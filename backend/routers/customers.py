@@ -18,6 +18,21 @@ async def create_customer(
     created_customer = await request.app.mongodb["customers"].find_one(
         {"_id": new_customer.inserted_id}
     )
+
+    # Real-Time Broadcast Notification
+    try:
+        from routers.notifications import broadcast_notification
+        c_name = created_customer.get("name", "Customer")
+        await broadcast_notification(
+            request.app.mongodb,
+            title=f"New Customer Registered",
+            message=f"{c_name} added to party directory",
+            type="customer",
+            link="/customers"
+        )
+    except Exception:
+        pass
+
     return created_customer
 
 @router.get("/", response_description="List all customers", response_model=List[Customer])

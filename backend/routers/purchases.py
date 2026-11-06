@@ -21,6 +21,23 @@ async def create_purchase(
         
     new_purchase = await request.app.mongodb["purchases"].insert_one(purchase_dict)
     created_purchase = await request.app.mongodb["purchases"].find_one({"_id": new_purchase.inserted_id})
+
+    # Real-Time Broadcast Notification
+    try:
+        from routers.notifications import broadcast_notification
+        p_name = created_purchase.get("purchase_name", "Supplies")
+        supplier = created_purchase.get("supplier_name", "Supplier")
+        amt = created_purchase.get("amount", 0)
+        await broadcast_notification(
+            request.app.mongodb,
+            title=f"New Purchase: {p_name}",
+            message=f"Purchase order for ₹{amt:,.2f} recorded to {supplier}",
+            type="purchase",
+            link="/purchases"
+        )
+    except Exception:
+        pass
+
     return created_purchase
 
 @router.get("/", response_description="List all purchase entries", response_model=List[Purchase])
