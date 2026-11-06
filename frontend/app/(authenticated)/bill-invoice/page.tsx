@@ -209,17 +209,26 @@ export default function BillInvoicePage() {
     const grandTotal = inv.amount || 0;
     const balance = inv.balance_due ?? (inv.status !== "Paid" ? grandTotal : 0);
 
-    // Short & crisp message with direct PDF link
+    // Professional corporate message with clean UI/UX spacing
     const cleanNum = (inv.invoice_number || "").replace(/[^A-Za-z0-9_-]/g, "_");
     const defaultPdfUrl = `https://billgen-32uc.onrender.com/uploads/invoices/Invoice_${cleanNum}.pdf`;
 
     const msg =
-      `🧾 *Invoice #${inv.invoice_number}*\n` +
-      `Client: *${inv.client}*\n` +
-      `Total: *₹${grandTotal.toLocaleString("en-IN")}* (Due: *₹${balance.toLocaleString("en-IN")}*)\n` +
-      `Status: ${inv.status}\n` +
-      `📄 Download PDF: ${defaultPdfUrl}\n` +
-      `_SiddhiVinayak Enterprise_ 🙏`;
+      `Hello *${inv.client}*, 👋\n\n` +
+      `Thank you for choosing *SiddhiVinayak Enterprise*!\n` +
+      `Here are your commercial vehicle billing details:\n\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
+      `🧾 *Invoice No:*  ${inv.invoice_number}\n` +
+      `📅 *Invoice Date:*  ${inv.date}\n` +
+      `💰 *Grand Total:*  ₹${grandTotal.toLocaleString("en-IN")}\n` +
+      `💵 *Balance Due:*  ₹${balance.toLocaleString("en-IN")}\n` +
+      `📌 *Status:*  ${inv.status}\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `📥 *Download Official Tax Invoice PDF:*\n` +
+      `👉 ${defaultPdfUrl}\n\n` +
+      `📞 Payment / Queries: +91 98250 14829\n\n` +
+      `Best Regards,\n` +
+      `*SiddhiVinayak Enterprise* 🙏`;
 
     setWhatsappMessage(msg);
   };
@@ -301,10 +310,17 @@ export default function BillInvoicePage() {
         }
       }
 
-      // Compact message with PDF link
+      // Preserve professional format with verified hosted PDF URL
       let finalMessage = whatsappMessage;
       if (hostedPdfUrl && !finalMessage.includes(hostedPdfUrl)) {
-        finalMessage = `${whatsappMessage}\n📄 PDF: ${hostedPdfUrl}`;
+        if (finalMessage.includes("https://billgen-32uc.onrender.com/uploads/invoices/")) {
+          finalMessage = finalMessage.replace(
+            /https:\/\/billgen-32uc\.onrender\.com\/uploads\/invoices\/[^\s\n]+/,
+            hostedPdfUrl
+          );
+        } else {
+          finalMessage = `${whatsappMessage}\n\n📥 *Download PDF:* ${hostedPdfUrl}`;
+        }
       }
 
       // Update invoice phone in database if missing
@@ -2409,7 +2425,7 @@ export default function BillInvoicePage() {
                 </button>
               </div>
               <textarea
-                rows={4}
+                rows={7}
                 value={whatsappMessage}
                 onChange={(e) => setWhatsappMessage(e.target.value)}
                 className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-2.5 text-[11px] font-medium text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none leading-relaxed font-mono"
