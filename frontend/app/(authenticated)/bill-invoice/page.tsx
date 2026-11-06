@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { getApiUrl, formatImageUrl } from "@/lib/api";
+import { getApiUrl, formatImageUrl, getAuthToken } from "@/lib/api";
 import { exportElementToPDF, generatePDFFile } from "@/lib/pdf";
 
 interface InvoiceItem {
@@ -209,12 +209,16 @@ export default function BillInvoicePage() {
     const grandTotal = inv.amount || 0;
     const balance = inv.balance_due ?? (inv.status !== "Paid" ? grandTotal : 0);
 
-    // Short & crisp message
+    // Short & crisp message with direct PDF link
+    const cleanNum = (inv.invoice_number || "").replace(/[^A-Za-z0-9_-]/g, "_");
+    const defaultPdfUrl = `https://billgen-32uc.onrender.com/uploads/invoices/Invoice_${cleanNum}.pdf`;
+
     const msg =
       `🧾 *Invoice #${inv.invoice_number}*\n` +
       `Client: *${inv.client}*\n` +
       `Total: *₹${grandTotal.toLocaleString("en-IN")}* (Due: *₹${balance.toLocaleString("en-IN")}*)\n` +
       `Status: ${inv.status}\n` +
+      `📄 Download PDF: ${defaultPdfUrl}\n` +
       `_SiddhiVinayak Enterprise_ 🙏`;
 
     setWhatsappMessage(msg);
@@ -240,7 +244,7 @@ export default function BillInvoicePage() {
     if (whatsappMessage) {
       try {
         await navigator.clipboard.writeText(whatsappMessage);
-      } catch {}
+      } catch { }
     }
 
     setIsSendingWhatsApp(true);
@@ -343,8 +347,13 @@ export default function BillInvoicePage() {
             formData.append("invoice_number", whatsappInvoice.invoice_number || "");
             formData.append("invoice_id", (whatsappInvoice._id || whatsappInvoice.id || "") as string);
 
+            const token = getAuthToken() || (typeof window !== "undefined" ? localStorage.getItem("auth_token") : null);
+            const headers: Record<string, string> = {};
+            if (token) headers["Authorization"] = `Bearer ${token}`;
+
             const uploadRes = await fetch(`${apiUrl}/invoices/upload-pdf`, {
               method: "POST",
+              headers,
               body: formData,
             });
 
@@ -380,7 +389,7 @@ export default function BillInvoicePage() {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ customer_phone: whatsappPhone.trim() }),
-        }).catch(() => {});
+        }).catch(() => { });
       }
 
       // Open WhatsApp chat directly with the client
@@ -2332,7 +2341,7 @@ export default function BillInvoicePage() {
       {/* ========================================================= */}
       {/* WHATSAPP DIRECT SHARE MODAL                              */}
       {/* ========================================================= */}
-                  {whatsappInvoice && (
+      {whatsappInvoice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-[#e2e8f0] space-y-4 animate-in zoom-in-95 duration-150">
             {/* Modal Header */}
@@ -2499,15 +2508,15 @@ export default function BillInvoicePage() {
                   <span>📎 Share PDF (Text Auto-Copied)</span>
                 </button>
 
-                {/* 2. Direct Chat with Phone Number */}
+                {/* 2. Direct Chat with Phone Number & PDF Link */}
                 <button
                   type="button"
                   onClick={handleExecuteSendWhatsApp}
                   disabled={isSendingWhatsApp}
                   className="flex items-center justify-center gap-2 px-4 py-3 bg-[#0260de] hover:bg-[#024ebd] text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
-                  title="Opens WhatsApp chat directly with this number"
+                  title="Opens WhatsApp chat directly with this number with PDF download link"
                 >
-                  <span>💬 Direct Chat with Number</span>
+                  <span>💬 Send with PDF Link ({whatsappPhone.replace(/[^0-9]/g, "").slice(-10) || "Client"})</span>
                 </button>
               </div>
 
