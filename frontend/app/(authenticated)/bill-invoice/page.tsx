@@ -209,29 +209,35 @@ export default function BillInvoicePage() {
     const grandTotal = inv.amount || 0;
     const balance = inv.balance_due ?? (inv.status !== "Paid" ? grandTotal : 0);
 
-    // Professional corporate message with clean UI/UX spacing & unguessable PDF token
+    // Professional corporate message with zero-due dynamic template
     const cleanNum = (inv.invoice_number || "").replace(/[^A-Za-z0-9_-]/g, "_");
-    const uniqueSuffix = inv._id ? `_${String(inv._id).slice(-8)}` : "";
     const defaultPdfUrl = (inv as any).pdf_url
       ? formatImageUrl((inv as any).pdf_url)
-      : `https://billgen-32uc.onrender.com/uploads/invoices/Invoice_${cleanNum}${uniqueSuffix}.pdf`;
+      : `https://billgen-32uc.onrender.com/uploads/invoices/Invoice_${cleanNum}.pdf`;
 
-    const msg =
-      `Hello *${inv.client}*, 👋\n\n` +
-      `Thank you for choosing *SiddhiVinayak Enterprise*!\n` +
-      `Here are your commercial vehicle billing details:\n\n` +
-      `━━━━━━━━━━━━━━━━━━━━━\n` +
-      `🧾 *Invoice No:*  ${inv.invoice_number}\n` +
-      `📅 *Invoice Date:*  ${inv.date}\n` +
-      `💰 *Grand Total:*  ₹${grandTotal.toLocaleString("en-IN")}\n` +
-      `💵 *Balance Due:*  ₹${balance.toLocaleString("en-IN")}\n` +
-      `📌 *Status:*  ${inv.status}\n` +
-      `━━━━━━━━━━━━━━━━━━━━━\n\n` +
-      `📥 *Download Official Tax Invoice PDF:*\n` +
-      `👉 ${defaultPdfUrl}\n\n` +
-      `📞 Payment / Queries: +91 98250 14829\n\n` +
-      `Best Regards,\n` +
-      `*SiddhiVinayak Enterprise* 🙏`;
+    const isZeroDue = balance <= 0 || (inv.status && inv.status.toLowerCase() === "paid");
+
+    const msg = isZeroDue
+      ? `Dear ${inv.client}\n\n` +
+        `Greetings from *SiddhiVinayak Enterprise*.\n\n` +
+        `Please find the details of your invoice below:\n\n` +
+        `📄 Download your invoice (PDF):\n` +
+        `${defaultPdfUrl}\n\n` +
+        `Thank you for your payment and for your continued trust in us. We look forward to working with you again.\n\n` +
+        `Warm regards,\n` +
+        `*SiddhiVinayak Enterprise* 🙏`
+      : `Dear ${inv.client}\n\n` +
+        `Greetings from *SiddhiVinayak Enterprise*.\n\n` +
+        `Please find the details of your invoice below:\n\n` +
+        `🧾 *Invoice No.:* ${inv.invoice_number}\n` +
+        `💰 *Total Amount:* ₹${grandTotal.toLocaleString("en-IN")}\n` +
+        `✅ *Amount Due:* ₹${balance.toLocaleString("en-IN")}\n` +
+        `📌 *Status:* ${inv.status}\n\n` +
+        `📄 Download your invoice (PDF):\n` +
+        `${defaultPdfUrl}\n\n` +
+        `Thank you for your payment and for your continued trust in us. We look forward to working with you again.\n\n` +
+        `Warm regards,\n` +
+        `*SiddhiVinayak Enterprise* 🙏`;
 
     setWhatsappMessage(msg);
   };
@@ -322,7 +328,7 @@ export default function BillInvoicePage() {
             hostedPdfUrl
           );
         } else {
-          finalMessage = `${whatsappMessage}\n\n📥 *Download PDF:* ${hostedPdfUrl}`;
+          finalMessage = `${whatsappMessage}\n\n📄 Download your invoice (PDF):\n${hostedPdfUrl}`;
         }
       }
 

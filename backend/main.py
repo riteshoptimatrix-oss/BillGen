@@ -1,11 +1,13 @@
 import os
+import re
+import base64
 import logging
 from contextlib import asynccontextmanager
 from typing import Dict, Any
 
 from fastapi import FastAPI, HTTPException, Request, Response, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -110,10 +112,87 @@ app.add_middleware(
 )
 
 # ==============================================================================
-# 3. STATIC FILES (SECURE USER UPLOADS)
+# 3. STATIC FILES & RESILIENT INVOICE PDF SERVING
 # ==============================================================================
 os.makedirs("uploads", exist_ok=True)
 os.makedirs("uploads/invoices", exist_ok=True)
+
+@app.get("/uploads/invoices/{filename}", tags=["invoices"])
+async def serve_invoice_pdf(filename: str, request: Request):
+    """
+    Resilient high-availability Invoice PDF delivery:
+    1. Direct file lookup on local disk.
+    2. Fuzzy match (handles suffix hashes, dashes, and underscores).
+    3. Persistent cloud fallback (reconstructs from MongoDB Atlas if Render restarted/cleared disk).
+    """
+    safe_filename = os.path.basename(filename)
+    if not safe_filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF invoices can be served.")
+
+    search_dirs = [
+        os.path.abspath("uploads/invoices"),
+        os.path.abspath(os.path.join("..", "uploads", "invoices")),
+        os.path.abspath(os.path.join("backend", "uploads", "invoices")),
+    ]
+
+    # 1. Direct match on disk
+    for s_dir in search_dirs:
+        candidate = os.path.join(s_dir, safe_filename)
+        if os.path.isfile(candidate) and os.path.getsize(candidate) > 0:
+            return FileResponse(
+                candidate,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'inline; filename="{safe_filename}"'}
+            )
+
+    # 2. Fuzzy match on disk (e.g. Invoice_INV-2026-0002 matches Invoice_INV-2026-0002_*.pdf)
+    stem = safe_filename[:-4]
+    core_num = re.sub(r"^Invoice_", "", stem, flags=re.IGNORECASE)
+    core_clean = re.sub(r"[^A-Za-z0-9]", "", core_num)
+
+    for s_dir in search_dirs:
+        if os.path.isdir(s_dir):
+            for existing in os.listdir(s_dir):
+                if existing.lower().endswith(".pdf"):
+                    existing_clean = re.sub(r"[^A-Za-z0-9]", "", existing[:-4])
+                    if core_clean and core_clean in existing_clean:
+                        matched_path = os.path.join(s_dir, existing)
+                        if os.path.isfile(matched_path) and os.path.getsize(matched_path) > 0:
+                            return FileResponse(
+                                matched_path,
+                                media_type="application/pdf",
+                                headers={"Content-Disposition": f'inline; filename="{safe_filename}"'}
+                            )
+
+    # 3. Persistent cloud fallback: restore from MongoDB Atlas
+    try:
+        db = request.app.mongodb
+        # Match by invoice_number or pdf_url
+        query = {
+            "$or": [
+                {"invoice_number": {"$regex": core_num.replace("_", "-"), "$options": "i"}},
+                {"invoice_number": {"$regex": core_num, "$options": "i"}},
+                {"pdf_url": {"$regex": safe_filename, "$options": "i"}},
+            ]
+        }
+        inv = await db["invoices"].find_one(query)
+        if inv and inv.get("pdf_base64"):
+            pdf_bytes = base64.b64decode(inv["pdf_base64"])
+            dest_dir = search_dirs[0]
+            os.makedirs(dest_dir, exist_ok=True)
+            saved_path = os.path.join(dest_dir, safe_filename)
+            with open(saved_path, "wb") as f:
+                f.write(pdf_bytes)
+            return FileResponse(
+                saved_path,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'inline; filename="{safe_filename}"'}
+            )
+    except Exception as e:
+        logger.warning(f"MongoDB invoice recovery fallback notice for {safe_filename}: {e}")
+
+    raise HTTPException(status_code=404, detail="Invoice PDF not found.")
+
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # ==============================================================================

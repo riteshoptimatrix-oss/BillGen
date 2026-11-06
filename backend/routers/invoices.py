@@ -1,6 +1,7 @@
 import os
 import re
 import secrets
+import base64
 import aiofiles
 from fastapi import APIRouter, Body, Request, HTTPException, status, UploadFile, File, Form, Depends
 from fastapi.responses import JSONResponse
@@ -44,33 +45,57 @@ async def upload_invoice_pdf(
     except Exception:
         pass
 
-    # Strictly sanitize invoice identifier and add non-sequential unique hash
+    # Strictly sanitize invoice identifier
     clean_num = re.sub(r"[^A-Za-z0-9_-]", "_", invoice_number) if invoice_number else f"inv_{datetime.now().strftime('%Y%m%d%H%M%S')}"
     unique_suffix = f"_{str(invoice_id)[-8:]}" if (invoice_id and ObjectId.is_valid(invoice_id)) else f"_{secrets.token_hex(4)}"
-    filename = f"Invoice_{clean_num}{unique_suffix}.pdf"
-    file_path = os.path.join(backend_invoices_dir, filename)
+    
+    canonical_filename = f"Invoice_{clean_num}.pdf"
+    suffixed_filename = f"Invoice_{clean_num}{unique_suffix}.pdf"
 
-    async with aiofiles.open(file_path, "wb") as f:
+    # Save canonical exact file (e.g. Invoice_INV-2026-0002.pdf)
+    canonical_path = os.path.join(backend_invoices_dir, canonical_filename)
+    async with aiofiles.open(canonical_path, "wb") as f:
         await f.write(content)
 
-    # Also sync to root uploads if accessible
+    # Save suffixed hash file (e.g. Invoice_INV-2026-0002_68d5e12a.pdf)
+    suffixed_path = os.path.join(backend_invoices_dir, suffixed_filename)
+    async with aiofiles.open(suffixed_path, "wb") as f:
+        await f.write(content)
+
+    # Also sync both to root uploads if accessible
     try:
-        root_path = os.path.join(root_invoices_dir, filename)
-        async with aiofiles.open(root_path, "wb") as rf:
+        async with aiofiles.open(os.path.join(root_invoices_dir, canonical_filename), "wb") as rf:
+            await rf.write(content)
+        async with aiofiles.open(os.path.join(root_invoices_dir, suffixed_filename), "wb") as rf:
             await rf.write(content)
     except Exception:
         pass
 
     base_url = str(request.base_url).rstrip("/")
-    pdf_url = f"{base_url}/uploads/invoices/{filename}"
+    pdf_url = f"{base_url}/uploads/invoices/{canonical_filename}"
+    suffixed_url = f"{base_url}/uploads/invoices/{suffixed_filename}"
+
+    # Permanent persistence in MongoDB Atlas (guarantees PDFs survive Render ephemeral disk restarts)
+    pdf_b64 = base64.b64encode(content).decode("ascii")
+    update_fields = {"pdf_url": pdf_url, "pdf_suffixed_url": suffixed_url, "pdf_base64": pdf_b64}
 
     if invoice_id and ObjectId.is_valid(invoice_id):
         await request.app.mongodb["invoices"].update_one(
             {"_id": ObjectId(invoice_id)},
-            {"$set": {"pdf_url": pdf_url}}
+            {"$set": update_fields}
+        )
+    elif invoice_number:
+        await request.app.mongodb["invoices"].update_one(
+            {"invoice_number": invoice_number},
+            {"$set": update_fields}
         )
 
-    return {"url": pdf_url, "filename": filename, "status": "success"}
+    return {
+        "url": pdf_url,
+        "filename": canonical_filename,
+        "suffixed_url": suffixed_url,
+        "status": "success"
+    }
 
 async def get_next_invoice_number_internal(mongodb) -> str:
     current_year = datetime.now().year
