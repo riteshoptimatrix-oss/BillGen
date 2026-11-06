@@ -3,12 +3,12 @@ import re
 import aiofiles
 from fastapi import APIRouter, Body, Request, HTTPException, status, UploadFile, File, Form, Depends
 from fastapi.responses import JSONResponse
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from models import Invoice, InvoiceCreate, InvoiceUpdate
 from bson import ObjectId
 from datetime import datetime
 
-from security import get_current_user, validate_uploaded_file
+from security import get_current_user, get_optional_user, validate_uploaded_file
 
 router = APIRouter(prefix="/api/invoices", tags=["invoices"])
 
@@ -18,7 +18,7 @@ async def upload_invoice_pdf(
     file: UploadFile = File(...),
     invoice_number: str = Form(""),
     invoice_id: str = Form(""),
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     """
     Secure Invoice PDF upload:

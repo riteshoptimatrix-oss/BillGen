@@ -128,6 +128,16 @@ async def get_current_user(
         "name": payload.get("name", "Authorized User")
     }
 
+async def get_optional_user(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer)
+) -> Optional[Dict[str, Any]]:
+    """Optional authentication dependency that does not raise 401 if unauthenticated."""
+    try:
+        return await get_current_user(request, credentials)
+    except Exception:
+        return None
+
 # ==============================================================================
 # In-Memory Rate Limiting & Brute Force Defense
 # ==============================================================================
