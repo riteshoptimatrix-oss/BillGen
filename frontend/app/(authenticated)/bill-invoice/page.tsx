@@ -233,81 +233,6 @@ export default function BillInvoicePage() {
     }
   };
 
-  // Option 1: Share the actual PDF file directly (opens WhatsApp with file attached and text auto-copied!)
-  const handleSharePDFFileDirect = async () => {
-    if (!whatsappInvoice) return;
-
-    const rawDigits = whatsappPhone.replace(/[^0-9]/g, "");
-    const cleanPhone = rawDigits.length === 10 ? `91${rawDigits}` : rawDigits;
-
-    // Automatically copy the short text message to clipboard so user can immediately Paste into WhatsApp caption!
-    if (whatsappMessage) {
-      try {
-        await navigator.clipboard.writeText(whatsappMessage);
-      } catch { }
-    }
-
-    setIsSendingWhatsApp(true);
-    showToast("Generating PDF... Text message copied to clipboard!");
-
-    const hadViewInvoiceOpen = !!viewInvoice;
-
-    try {
-      const filename = `Invoice-${whatsappInvoice.invoice_number || "SiddhiVinayak"}.pdf`;
-
-      if (!hadViewInvoiceOpen) {
-        setViewInvoice(whatsappInvoice);
-        for (let i = 0; i < 10; i++) {
-          if (printAreaRef.current) break;
-          await new Promise((resolve) => setTimeout(resolve, 80));
-        }
-      }
-
-      if (printAreaRef.current) {
-        const pdfFile = await generatePDFFile(printAreaRef.current, filename);
-
-        if (pdfFile) {
-          // If native file sharing is supported (Mobile Chrome, Safari, Android, iOS):
-          if (
-            typeof navigator !== "undefined" &&
-            (navigator as any).canShare &&
-            (navigator as any).canShare({ files: [pdfFile] })
-          ) {
-            try {
-              await (navigator as any).share({
-                title: filename,
-                text: whatsappMessage,
-                files: [pdfFile],
-              });
-              showToast("✓ Text copied! In WhatsApp, paste into caption & send.");
-              setWhatsappInvoice(null);
-              return;
-            } catch (shareErr) {
-              console.log("Native file share canceled or dismissed:", shareErr);
-            }
-          }
-
-          // Desktop fallback: Download the PDF file directly & open WhatsApp Web chat
-          await exportElementToPDF(printAreaRef.current, filename);
-          if (cleanPhone && cleanPhone.length >= 10) {
-            const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(whatsappMessage)}`;
-            window.open(waUrl, "_blank", "noopener,noreferrer");
-          }
-          showToast("✓ PDF downloaded & text copied! Paste text in WhatsApp chat.");
-          setWhatsappInvoice(null);
-        }
-      }
-    } catch (err) {
-      console.error("PDF share error:", err);
-      showToast("Could not complete PDF share. Please try again.");
-    } finally {
-      if (!hadViewInvoiceOpen) {
-        setViewInvoice(null);
-      }
-      setIsSendingWhatsApp(false);
-    }
-  };
-
   // Option 2: Direct Chat with Phone Number (opens chat with short message + download link)
   const handleExecuteSendWhatsApp = async () => {
     if (!whatsappInvoice) return;
@@ -2491,47 +2416,39 @@ export default function BillInvoicePage() {
               />
             </div>
 
-            {/* Two Clear Primary Action Buttons */}
-            <div className="space-y-2 pt-2 border-t border-[#e2e8f0]">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {/* 1. Send Actual PDF File to WhatsApp */}
-                <button
-                  type="button"
-                  onClick={handleSharePDFFileDirect}
-                  disabled={isSendingWhatsApp}
-                  className="flex items-center justify-center gap-2 px-4 py-3 bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
-                  title="Sends the actual PDF document directly to WhatsApp"
-                >
-                  <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
-                    <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.665-.699c.983.537 1.839.814 2.795.814 3.179 0 5.766-2.587 5.767-5.766.002-3.18-2.585-5.766-5.767-5.766zm3.376 8.21c-.144.405-.837.774-1.17.824-.312.045-.697.072-2.148-.528-1.749-.724-2.88-2.5-2.967-2.617-.087-.116-.708-.941-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.299.144.347.491 1.2.534 1.287.043.087.072.188.014.303-.058.116-.087.188-.173.289l-.26.303c-.087.087-.178.182-.077.355.101.173.45.742.965 1.202.664.593 1.224.776 1.397.863.173.087.275.072.376-.043.101-.116.433-.506.549-.679.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.043.072.043.419-.101.824z" />
-                  </svg>
-                  <span>📎 Share PDF (Text Auto-Copied)</span>
-                </button>
+            {/* Single Clean WhatsApp Action Button */}
+            <div className="flex items-center justify-between gap-3 pt-3 border-t border-[#e2e8f0]">
+              <button
+                type="button"
+                onClick={() => setWhatsappInvoice(null)}
+                className="px-4 py-2.5 text-xs font-semibold text-[#64748b] hover:text-[#0f172a] hover:bg-[#f8fafc] border border-[#e2e8f0] rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
 
-                {/* 2. Direct Chat with Phone Number & PDF Link */}
-                <button
-                  type="button"
-                  onClick={handleExecuteSendWhatsApp}
-                  disabled={isSendingWhatsApp}
-                  className="flex items-center justify-center gap-2 px-4 py-3 bg-[#0260de] hover:bg-[#024ebd] text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
-                  title="Opens WhatsApp chat directly with this number with PDF download link"
-                >
-                  <span>💬 Send with PDF Link ({whatsappPhone.replace(/[^0-9]/g, "").slice(-10) || "Client"})</span>
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between pt-1">
-                <p className="text-[10px] text-slate-500">
-                  💡 <strong>Kaise use karein:</strong> <em>Share PDF</em> click karte hi PDF attach ho jaegi aur text copy ho jaega. WhatsApp me bas Caption me <strong>Paste</strong> karke bhej dijiye!
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setWhatsappInvoice(null)}
-                  className="text-xs font-semibold text-[#64748b] hover:text-[#0f172a] transition-colors cursor-pointer px-2 py-1"
-                >
-                  Cancel
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={handleExecuteSendWhatsApp}
+                disabled={isSendingWhatsApp}
+                className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-60 cursor-pointer"
+                title="Send invoice message with direct PDF download link on WhatsApp"
+              >
+                {isSendingWhatsApp ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Preparing PDF & Opening WhatsApp...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
+                      <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.665-.699c.983.537 1.839.814 2.795.814 3.179 0 5.766-2.587 5.767-5.766.002-3.18-2.585-5.766-5.767-5.766zm3.376 8.21c-.144.405-.837.774-1.17.824-.312.045-.697.072-2.148-.528-1.749-.724-2.88-2.5-2.967-2.617-.087-.116-.708-.941-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.299.144.347.491 1.2.534 1.287.043.087.072.188.014.303-.058.116-.087.188-.173.289l-.26.303c-.087.087-.178.182-.077.355.101.173.45.742.965 1.202.664.593 1.224.776 1.397.863.173.087.275.072.376-.043.101-.116.433-.506.549-.679.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.043.072.043.419-.101.824z" />
+                    </svg>
+                    <span>
+                      Send on WhatsApp ({whatsappPhone.replace(/[^0-9]/g, "").slice(-10) || "Client"})
+                    </span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
