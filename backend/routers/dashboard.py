@@ -3,7 +3,7 @@ from typing import Dict, Any
 from datetime import datetime
 from security import get_current_user
 
-router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
+router = APIRouter(prefix="/api/dashboard", tags=["dashboard"], dependencies=[Depends(get_current_user)])
 
 @router.get("/summary", response_description="Get dashboard summary data")
 async def get_dashboard_summary(

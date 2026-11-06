@@ -209,9 +209,12 @@ export default function BillInvoicePage() {
     const grandTotal = inv.amount || 0;
     const balance = inv.balance_due ?? (inv.status !== "Paid" ? grandTotal : 0);
 
-    // Professional corporate message with clean UI/UX spacing
+    // Professional corporate message with clean UI/UX spacing & unguessable PDF token
     const cleanNum = (inv.invoice_number || "").replace(/[^A-Za-z0-9_-]/g, "_");
-    const defaultPdfUrl = `https://billgen-32uc.onrender.com/uploads/invoices/Invoice_${cleanNum}.pdf`;
+    const uniqueSuffix = inv._id ? `_${String(inv._id).slice(-8)}` : "";
+    const defaultPdfUrl = (inv as any).pdf_url
+      ? formatImageUrl((inv as any).pdf_url)
+      : `https://billgen-32uc.onrender.com/uploads/invoices/Invoice_${cleanNum}${uniqueSuffix}.pdf`;
 
     const msg =
       `Hello *${inv.client}*, 👋\n\n` +

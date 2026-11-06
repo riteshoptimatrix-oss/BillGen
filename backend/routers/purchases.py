@@ -6,7 +6,7 @@ from bson import ObjectId
 from datetime import datetime
 from security import get_current_user
 
-router = APIRouter(prefix="/api/purchases", tags=["purchases"])
+router = APIRouter(prefix="/api/purchases", tags=["purchases"], dependencies=[Depends(get_current_user)])
 
 @router.post("/", response_description="Add a new purchase entry", status_code=status.HTTP_201_CREATED, response_model=Purchase)
 async def create_purchase(

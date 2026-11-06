@@ -1,5 +1,6 @@
 import os
 import re
+import secrets
 import aiofiles
 from fastapi import APIRouter, Body, Request, HTTPException, status, UploadFile, File, Form, Depends
 from fastapi.responses import JSONResponse
@@ -43,9 +44,10 @@ async def upload_invoice_pdf(
     except Exception:
         pass
 
-    # Strictly sanitize invoice identifier to prevent directory traversal
+    # Strictly sanitize invoice identifier and add non-sequential unique hash
     clean_num = re.sub(r"[^A-Za-z0-9_-]", "_", invoice_number) if invoice_number else f"inv_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-    filename = f"Invoice_{clean_num}.pdf"
+    unique_suffix = f"_{str(invoice_id)[-8:]}" if (invoice_id and ObjectId.is_valid(invoice_id)) else f"_{secrets.token_hex(4)}"
+    filename = f"Invoice_{clean_num}{unique_suffix}.pdf"
     file_path = os.path.join(backend_invoices_dir, filename)
 
     async with aiofiles.open(file_path, "wb") as f:
@@ -85,7 +87,10 @@ async def get_next_invoice_number_internal(mongodb) -> str:
     return f"INV-{current_year}-{(count + 1):04d}"
 
 @router.get("/next-number", response_description="Get next available invoice number")
-async def get_next_invoice_number(request: Request) -> Dict[str, str]:
+async def get_next_invoice_number(
+    request: Request,
+    user: Dict[str, Any] = Depends(get_current_user)
+) -> Dict[str, str]:
     next_number = await get_next_invoice_number_internal(request.app.mongodb)
     return {"next_number": next_number}
 
@@ -128,7 +133,10 @@ async def create_invoice(
     return created_invoice
 
 @router.get("/", response_description="List all invoices", response_model=List[Invoice])
-async def list_invoices(request: Request):
+async def list_invoices(
+    request: Request,
+    user: Dict[str, Any] = Depends(get_current_user)
+):
     invoices = await request.app.mongodb["invoices"].find().sort("_id", -1).to_list(1000)
     
     current_year = datetime.now().year
@@ -140,7 +148,11 @@ async def list_invoices(request: Request):
     return invoices
 
 @router.get("/{id}", response_description="Get a single invoice", response_model=Invoice)
-async def show_invoice(id: str, request: Request):
+async def show_invoice(
+    id: str,
+    request: Request,
+    user: Dict[str, Any] = Depends(get_current_user)
+):
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Invoice ID format")
     if (invoice := await request.app.mongodb["invoices"].find_one({"_id": ObjectId(id)})) is not None:

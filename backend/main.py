@@ -102,7 +102,7 @@ app.add_middleware(
         "https://smart-erp-testing.netlify.app",
         *(os.getenv("CORS_ORIGINS", "").split(",") if os.getenv("CORS_ORIGINS") else []),
     ],
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|.*\.netlify\.app)(:\d+)?$",
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d+)?$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
@@ -173,8 +173,8 @@ async def login(credentials: LoginRequest, request: Request, response: Response)
         # Verify via bcrypt hash
         if verify_password(password, DEFAULT_ADMIN_PASSWORD_HASH):
             is_valid = True
-        # Backwards compatible check for existing active credentials
-        elif password == os.getenv("ADMIN_PASSWORD", "8980614160@.com"):
+        # Environment override if configured in production
+        elif os.getenv("ADMIN_PASSWORD") and password == os.getenv("ADMIN_PASSWORD"):
             is_valid = True
             
     if not is_valid:

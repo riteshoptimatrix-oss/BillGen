@@ -5,7 +5,7 @@ from models import Customer, CustomerCreate, CustomerUpdate
 from bson import ObjectId
 from security import get_current_user
 
-router = APIRouter(prefix="/api/customers", tags=["customers"])
+router = APIRouter(prefix="/api/customers", tags=["customers"], dependencies=[Depends(get_current_user)])
 
 @router.post("/", response_description="Add new customer", status_code=status.HTTP_201_CREATED, response_model=Customer)
 async def create_customer(

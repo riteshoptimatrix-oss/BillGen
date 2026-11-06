@@ -1,14 +1,18 @@
 import os
 import time
+import secrets
 import jwt
 import bcrypt
+from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, Set
 from fastapi import Request, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
+load_dotenv()
+
 # JWT configuration
-SECRET_KEY = os.getenv("SECRET_KEY", "siddhivinayak-enterprise-billing-secure-key-2026")
+SECRET_KEY = os.getenv("SECRET_KEY") or "c1c0283c572eb50ea9b2f87e1599393219d2cd8377fab296e1db1b5af945535c"
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440")) # 24 hours
 

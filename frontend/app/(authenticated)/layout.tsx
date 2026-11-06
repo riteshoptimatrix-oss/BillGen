@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import NavigationProgressBar from "@/components/NavigationProgressBar";
-import { setupSecureFetchInterceptor, getAuthToken, clearAuthToken, getApiUrl } from "@/lib/api";
+import { setupSecureFetchInterceptor, getAuthToken, clearAuthToken, isTokenValid, getApiUrl } from "@/lib/api";
 
 export default function AuthenticatedLayout({
   children,
@@ -22,30 +22,29 @@ export default function AuthenticatedLayout({
     setupSecureFetchInterceptor();
 
     const token = getAuthToken();
-    const isLegacyAuth = localStorage.getItem("isAuthenticated") === "true";
 
-    if (!token && !isLegacyAuth) {
+    // Enforce cryptographic token validation (localStorage bypass prevention)
+    if (!token || !isTokenValid(token)) {
       clearAuthToken();
-      router.push("/login");
+      router.replace("/login");
       return;
     }
 
-    // Verify session state
+    // Grant verified frontend session
     setIsAuthorized(true);
 
-    // Background verify session validity with backend
-    if (token) {
-      fetch(`${getApiUrl()}/auth/me`)
-        .then((res) => {
-          if (!res.ok && res.status === 401) {
-            clearAuthToken();
-            router.push("/login");
-          }
-        })
-        .catch(() => {
-          // Allow offline or transient network operations
-        });
-    }
+    // Cryptographic signature check against backend
+    fetch(`${getApiUrl()}/auth/me`)
+      .then((res) => {
+        if (!res.ok && (res.status === 401 || res.status === 403)) {
+          clearAuthToken();
+          setIsAuthorized(false);
+          router.replace("/login");
+        }
+      })
+      .catch(() => {
+        // Network lag or offline mode; token structure was validated locally
+      });
   }, [router]);
 
   // Automatically close mobile menu whenever route changes

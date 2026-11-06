@@ -10,7 +10,7 @@ import aiofiles
 from models import Labour, LabourCreate, LabourUpdate
 from security import get_current_user, validate_uploaded_file
 
-router = APIRouter(prefix="/api/labours", tags=["labours"])
+router = APIRouter(prefix="/api/labours", tags=["labours"], dependencies=[Depends(get_current_user)])
 
 @router.post("/upload", response_description="Upload a labour profile image")
 async def upload_image(

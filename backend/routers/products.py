@@ -10,7 +10,7 @@ import aiofiles
 from models import Product, ProductCreate, ProductUpdate
 from security import get_current_user, validate_uploaded_file
 
-router = APIRouter(prefix="/api/products", tags=["products"])
+router = APIRouter(prefix="/api/products", tags=["products"], dependencies=[Depends(get_current_user)])
 
 @router.post("/upload", response_description="Upload a product image")
 async def upload_image(

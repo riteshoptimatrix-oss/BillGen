@@ -4,7 +4,7 @@ from bson import ObjectId
 from datetime import datetime
 from security import get_current_user
 
-router = APIRouter(prefix="/api/finance", tags=["finance"])
+router = APIRouter(prefix="/api/finance", tags=["finance"], dependencies=[Depends(get_current_user)])
 
 @router.get("/overview", response_description="Get Finance aggregated summary for Sales and Purchases")
 async def get_finance_overview(request: Request) -> Dict[str, Any]:
