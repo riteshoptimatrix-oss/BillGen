@@ -13,6 +13,7 @@ from pydantic import BaseModel, EmailStr, Field
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 
+from fastapi.middleware.gzip import GZipMiddleware
 from security import (
     verify_password,
     create_access_token,
@@ -44,13 +45,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger("security")
 
-# Setup MongoDB connection lifespan
+# Setup MongoDB connection lifespan with high-performance connection pooling
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     mongodb_url = os.getenv("MONGODB_URI") or os.getenv("MONGODB_URL", "mongodb://localhost:27017")
     db_name = os.getenv("MONGODB_DB_NAME", "bill_generator_db")
     
-    client_kwargs = {}
+    client_kwargs = {
+        "minPoolSize": 10,
+        "maxPoolSize": 50,
+        "maxIdleTimeMS": 45000,
+        "serverSelectionTimeoutMS": 5000,
+        "connectTimeoutMS": 10000,
+        "socketTimeoutMS": 20000,
+    }
     try:
         import certifi
         client_kwargs["tlsCAFile"] = certifi.where()
@@ -60,6 +68,29 @@ async def lifespan(app: FastAPI):
     app.mongodb_client = AsyncIOMotorClient(mongodb_url, **client_kwargs)
     app.mongodb = app.mongodb_client.get_database(db_name)
     logger.info(f"Secure connection initialized to database: {db_name}")
+
+    # Automatically ensure critical performance indexes on MongoDB Atlas
+    try:
+        await app.mongodb["invoices"].create_index([("date", -1)], background=True)
+        await app.mongodb["invoices"].create_index([("invoice_number", 1)], background=True)
+        await app.mongodb["invoices"].create_index([("status", 1)], background=True)
+        await app.mongodb["invoices"].create_index([("client", 1)], background=True)
+        await app.mongodb["products"].create_index([("name", 1)], background=True)
+        await app.mongodb["products"].create_index([("stock", 1)], background=True)
+        await app.mongodb["products"].create_index([("category", 1)], background=True)
+        await app.mongodb["customers"].create_index([("name", 1)], background=True)
+        await app.mongodb["customers"].create_index([("mobile_number", 1)], background=True)
+        await app.mongodb["labours"].create_index([("name", 1)], background=True)
+        await app.mongodb["labours"].create_index([("mobile_number", 1)], background=True)
+        await app.mongodb["labours"].create_index([("status", 1)], background=True)
+        await app.mongodb["purchases"].create_index([("purchase_date", -1)], background=True)
+        await app.mongodb["purchases"].create_index([("status", 1)], background=True)
+        await app.mongodb["purchases"].create_index([("supplier_name", 1)], background=True)
+        await app.mongodb["expenses"].create_index([("date", -1)], background=True)
+        logger.info("MongoDB Atlas performance indexes verified/initialized.")
+    except Exception as idx_err:
+        logger.warning(f"MongoDB Atlas index notice: {idx_err}")
+
     yield
     app.mongodb_client.close()
     logger.info("Closed MongoDB database connection.")
@@ -71,6 +102,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url=None  # Disable unnecessary secondary documentation surface
 )
+
+# Enable response GZip compression to cut network payload sizes by ~70-80%
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # ==============================================================================
 # 1. SECURITY RESPONSE HEADERS MIDDLEWARE
@@ -220,6 +254,8 @@ class LoginResponse(BaseModel):
     user: Dict[str, Any]
 
 @app.get("/", tags=["health"])
+@app.get("/api/health", tags=["health"])
+@app.get("/api/ping", tags=["health"])
 def read_root():
     return {
         "status": "online",

@@ -99,8 +99,10 @@ async def upload_invoice_pdf(
 
 async def get_next_invoice_number_internal(mongodb) -> str:
     current_year = datetime.now().year
-    count = await mongodb["invoices"].count_documents({})
-    cursor = mongodb["invoices"].find({"invoice_number": {"$regex": f"^INV-{current_year}-"}}).sort("invoice_number", -1).limit(1)
+    cursor = mongodb["invoices"].find(
+        {"invoice_number": {"$regex": f"^INV-{current_year}-"}},
+        {"invoice_number": 1}
+    ).sort("invoice_number", -1).limit(1)
     latest = await cursor.to_list(1)
     if latest and "invoice_number" in latest[0]:
         try:
@@ -109,6 +111,7 @@ async def get_next_invoice_number_internal(mongodb) -> str:
             return f"INV-{current_year}-{seq:04d}"
         except Exception:
             pass
+    count = await mongodb["invoices"].count_documents({})
     return f"INV-{current_year}-{(count + 1):04d}"
 
 @router.get("/next-number", response_description="Get next available invoice number")
@@ -136,7 +139,10 @@ async def create_invoice(
         invoice_dict["date"] = datetime.now().strftime("%Y-%m-%d")
 
     new_invoice = await request.app.mongodb["invoices"].insert_one(invoice_dict)
-    created_invoice = await request.app.mongodb["invoices"].find_one({"_id": new_invoice.inserted_id})
+    created_invoice = await request.app.mongodb["invoices"].find_one(
+        {"_id": new_invoice.inserted_id},
+        {"pdf_base64": 0}
+    )
 
     # Automatically update stock quantities for finalized invoice items
     if invoice_dict.get("items"):
@@ -162,7 +168,8 @@ async def list_invoices(
     request: Request,
     user: Dict[str, Any] = Depends(get_current_user)
 ):
-    invoices = await request.app.mongodb["invoices"].find().sort("_id", -1).to_list(1000)
+    # CRITICAL PERFORMANCE BOOST: Exclude heavy pdf_base64 payload from list queries
+    invoices = await request.app.mongodb["invoices"].find({}, {"pdf_base64": 0}).sort("_id", -1).to_list(1000)
     
     current_year = datetime.now().year
     for idx, inv in enumerate(invoices):
@@ -180,7 +187,7 @@ async def show_invoice(
 ):
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Invoice ID format")
-    if (invoice := await request.app.mongodb["invoices"].find_one({"_id": ObjectId(id)})) is not None:
+    if (invoice := await request.app.mongodb["invoices"].find_one({"_id": ObjectId(id)}, {"pdf_base64": 0})) is not None:
         if not invoice.get("invoice_number"):
             invoice["invoice_number"] = f"INV-{datetime.now().year}-{str(invoice['_id'])[-4:].upper()}"
         return invoice
@@ -203,8 +210,10 @@ async def update_invoice(
             {"_id": ObjectId(id)}, {"$set": invoice_dict}
         )
 
-    if (updated_invoice := await request.app.mongodb["invoices"].find_one({"_id": ObjectId(id)})) is not None:
+    if (updated_invoice := await request.app.mongodb["invoices"].find_one({"_id": ObjectId(id)}, {"pdf_base64": 0})) is not None:
         return updated_invoice
+
+    raise HTTPException(status_code=404, detail=f"Invoice {id} not found")
 
     raise HTTPException(status_code=404, detail=f"Invoice {id} not found")
 

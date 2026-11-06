@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, Request, Depends
 from typing import Dict, Any
 from datetime import datetime
@@ -11,11 +12,40 @@ async def get_dashboard_summary(
     user: Dict[str, Any] = Depends(get_current_user)
 ) -> Dict[str, Any]:
     system_alerts = []
-    
+    db = request.app.mongodb
+
+    # Execute all database queries concurrently in parallel
+    (
+        products_count,
+        low_stock_products,
+        invoices,
+        recent_invoices_raw,
+        active_labours,
+        labours,
+        expenses
+    ) = await asyncio.gather(
+        # 1. Product count and low stock items (lean projection)
+        db["products"].count_documents({}),
+        db["products"].find({"stock": {"$lt": 10}}, {"_id": 1, "name": 1, "stock": 1}).limit(5).to_list(5),
+        
+        # 2. Invoices summary (excluding heavy pdf_base64)
+        db["invoices"].find({}, {"_id": 1, "status": 1, "amount": 1, "client": 1}).to_list(1000),
+        
+        # 3. Recent 5 invoices (lean projection)
+        db["invoices"].find(
+            {},
+            {"_id": 1, "invoice_number": 1, "client": 1, "amount": 1, "status": 1, "date": 1}
+        ).sort("_id", -1).limit(5).to_list(5),
+        
+        # 4. Labours count and salary list
+        db["labours"].count_documents({}),
+        db["labours"].find({}, {"_id": 1, "name": 1, "salary": 1}).to_list(1000),
+        
+        # 5. Expenses list
+        db["expenses"].find({}, {"amount": 1}).to_list(1000)
+    )
+
     # 1. Low stock alerts
-    products_count = await request.app.mongodb["products"].count_documents({})
-    low_stock_products_cursor = request.app.mongodb["products"].find({"stock": {"$lt": 10}}).limit(5)
-    low_stock_products = await low_stock_products_cursor.to_list(5)
     for product in low_stock_products:
         system_alerts.append({
             "id": f"stock-{product['_id']}",
@@ -26,9 +56,6 @@ async def get_dashboard_summary(
         })
 
     # 2. Overdue Invoices
-    invoices_cursor = request.app.mongodb["invoices"].find({})
-    invoices = await invoices_cursor.to_list(1000)
-    
     total_revenue = 0
     pending_bills = 0
     for inv in invoices:
@@ -44,9 +71,7 @@ async def get_dashboard_summary(
                     "subtitle": f"₹{inv.get('amount', 0):,} is Overdue",
                     "actionText": "Send Reminder"
                 })
-    
-    recent_invoices_cursor = request.app.mongodb["invoices"].find({}).sort("_id", -1).limit(5)
-    recent_invoices_raw = await recent_invoices_cursor.to_list(5)
+
     recent_invoices = []
     current_year = datetime.now().year
     for inv in recent_invoices_raw:
@@ -60,10 +85,6 @@ async def get_dashboard_summary(
         })
 
     # 3. Labour Salary Due
-    active_labours = await request.app.mongodb["labours"].count_documents({})
-    labours_cursor = request.app.mongodb["labours"].find({})
-    labours = await labours_cursor.to_list(1000)
-    
     total_salaries = 0
     for labour in labours:
         salary = labour.get("salary", 0)
@@ -77,12 +98,9 @@ async def get_dashboard_summary(
                 "actionText": "Pay Now"
             })
 
-    expenses_cursor = request.app.mongodb["expenses"].find({})
-    expenses = await expenses_cursor.to_list(1000)
     total_expenses = sum(exp.get("amount", 0) for exp in expenses)
-    
     net_profit = total_revenue - (total_expenses + total_salaries)
-    
+
     chart_data = [
         {"name": "Jan", "Revenue": 10000, "Expenses": 5000},
         {"name": "Feb", "Revenue": 13000, "Expenses": 7000},

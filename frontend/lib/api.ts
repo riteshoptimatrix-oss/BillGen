@@ -113,6 +113,23 @@ export function isTokenValid(token: string | null): boolean {
   }
 }
 
+let _hasWarmedUp = false;
+
+/**
+ * Proactively pings backend health check to wake Render server up if it went to sleep (cold start).
+ * Runs silently in the background without blocking page render.
+ */
+export function warmupBackend(): void {
+  if (typeof window === "undefined" || _hasWarmedUp) return;
+  _hasWarmedUp = true;
+  
+  const apiUrl = getApiUrl();
+  fetch(`${apiUrl}/health`, { method: "GET" })
+    .catch(() => {
+      // Ignore background warmup errors
+    });
+}
+
 /**
  * Global Secure Fetch Interceptor
  * Transparently attaches Bearer JWT authorization headers and credentials to all API calls.
@@ -120,6 +137,9 @@ export function isTokenValid(token: string | null): boolean {
 export function setupSecureFetchInterceptor(): void {
   if (typeof window === "undefined") return;
   if ((window as any).__secureFetchPatched) return;
+
+  // Fire background warmup ping
+  warmupBackend();
 
   const originalFetch = window.fetch;
   window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {

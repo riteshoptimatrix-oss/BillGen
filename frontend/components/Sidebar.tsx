@@ -62,7 +62,7 @@ const navIcons = {
     </svg>
   ),
   doubleChevronRight: (
-    <svg className="w-4 h-4 flex-shrink-0 text-white/90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
     </svg>
   ),
@@ -144,18 +144,10 @@ export default function Sidebar({
   };
 
   // ============================================================================
-  // 1. VERTICAL EXECUTIVE NAVY ICON RAIL (Aligned 1-to-1 with Expanded Menu)
+  // 1. VERTICAL ICON RAIL (Clean Light Theme matching Expanded Menu)
   // ============================================================================
   const verticalIconRail = (
-    <div className="relative flex w-16 sm:w-[68px] flex-col items-center justify-between py-5 overflow-hidden bg-gradient-to-b from-[#0b192c] via-[#0d2a4a] to-[#08121f] text-white flex-shrink-0 select-none shadow-lg shadow-slate-900/20 h-full rounded-[26px]">
-      {/* Decorative contoured radial gradient grain */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-20"
-        style={{
-          backgroundImage: `radial-gradient(ellipse at 100% 30%, rgba(2,96,222,0.4) 0%, transparent 60%), radial-gradient(ellipse at 0% 75%, rgba(0,0,0,0.5) 0%, transparent 50%)`
-        }}
-      />
-
+    <div className="relative flex w-full flex-col items-center justify-between py-5 overflow-hidden bg-white text-slate-700 flex-shrink-0 select-none h-full rounded-[26px]">
       {/* Top Section: Aligned Brand SV Button + Navigation Groups */}
       <div className="w-full flex flex-col items-center z-10">
         {/* Top SV Brand Button - Height 40px + mb-6 matches Expanded Menu Header */}
@@ -172,7 +164,7 @@ export default function Sidebar({
               }
             }}
             title={isCollapsed ? "Expand Sidebar" : "Menu"}
-            className="w-10 h-10 rounded-2xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all duration-200 active:scale-95 cursor-pointer shadow-xs"
+            className="w-10 h-10 rounded-2xl bg-[#0260de] hover:bg-[#0252bf] text-white flex items-center justify-center transition-all duration-200 active:scale-95 cursor-pointer shadow-xs"
           >
             {isCollapsed ? navIcons.doubleChevronRight : (
               <div className="flex flex-col items-center justify-center font-black text-xs">
@@ -189,7 +181,7 @@ export default function Sidebar({
               {/* Category spacer / divider line matching the h-5 mb-1 group title on the right */}
               <div className="h-5 mb-1 flex items-center justify-center w-full">
                 {gIdx > 0 ? (
-                  <div className="h-[1px] w-7 bg-white/20" />
+                  <div className="h-[1px] w-7 bg-slate-200" />
                 ) : (
                   <div className="h-[1px] w-7 opacity-0" />
                 )}
@@ -207,8 +199,8 @@ export default function Sidebar({
                       title={item.name}
                       className={`relative flex items-center justify-center transition-all duration-200 h-10 w-10 rounded-2xl ${
                         active
-                          ? "bg-white text-[#0260de] shadow-lg shadow-black/20 font-black scale-100"
-                          : "text-slate-300 hover:bg-white/10 hover:text-white"
+                          ? "bg-blue-50 text-[#0260de] font-bold shadow-xs border border-blue-100 scale-100"
+                          : "text-slate-500 hover:bg-slate-50 hover:text-[#0f172a]"
                       }`}
                     >
                       {item.icon}
@@ -222,12 +214,12 @@ export default function Sidebar({
       </div>
 
       {/* Bottom Section: Aligned Logout Button */}
-      <div className="z-10 w-full flex flex-col items-center pt-4">
+      <div className="z-10 w-full flex flex-col items-center pt-4 border-t border-slate-100">
         <button
           type="button"
           onClick={handleLogout}
           title="Log Out"
-          className="flex h-10 w-10 items-center justify-center rounded-2xl text-slate-300 hover:bg-white/15 hover:text-white transition-all cursor-pointer active:scale-95"
+          className="flex h-10 w-10 items-center justify-center rounded-2xl text-slate-400 hover:bg-red-50 hover:text-red-600 transition-all cursor-pointer active:scale-95"
         >
           {navIcons.logout}
         </button>
@@ -236,10 +228,10 @@ export default function Sidebar({
   );
 
   // ============================================================================
-  // 2. EXPANDED RIGHT MENU PANEL (Modern Pure White)
+  // 2. EXPANDED RIGHT MENU PANEL (Modern Pure White Single Unified Sidebar)
   // ============================================================================
   const expandedMenuPanel = (
-    <div className="flex flex-1 flex-col justify-between overflow-y-auto bg-white px-4 py-5 transition-all duration-300 min-w-[210px] rounded-r-[26px]">
+    <div className="flex flex-1 flex-col justify-between overflow-y-auto bg-white px-4 py-5 transition-all duration-300 w-full h-full rounded-[26px]">
       <div>
         {/* Brand Header - Height 40px + mb-6 */}
         <div className="h-10 mb-6 flex items-center justify-between px-1">
@@ -322,9 +314,18 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* Footer system status */}
-      <div className="pt-4 px-2">
-        <div className="h-10 flex items-center justify-between text-[11px] text-slate-400">
+      {/* Footer system status & Logout */}
+      <div className="pt-4 px-2 space-y-2">
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="w-full flex items-center gap-2.5 px-3 h-10 rounded-2xl text-[13px] font-medium text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
+        >
+          <span className="text-slate-400 group-hover:text-red-600">{navIcons.logout}</span>
+          <span>Log Out</span>
+        </button>
+
+        <div className="h-8 flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-100 pt-2">
           <span className="flex items-center gap-1.5 font-medium">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             System Online
@@ -348,8 +349,8 @@ export default function Sidebar({
             onClick={onClose}
             aria-hidden="true"
           />
-          {/* Drawer combining vertical rail + expanded panel */}
-          <div className="fixed inset-y-0 left-0 w-80 max-w-[88vw] p-2.5 sm:p-3 flex flex-col font-sans z-50 animate-in slide-in-from-left duration-250">
+          {/* Single drawer panel */}
+          <div className="fixed inset-y-0 left-0 w-72 max-w-[85vw] p-2.5 sm:p-3 flex flex-col font-sans z-50 animate-in slide-in-from-left duration-250">
             <div className="flex h-full w-full select-none overflow-hidden rounded-[26px] border border-[#e2e8f0] bg-white shadow-2xl relative">
               {/* Mobile Close Button */}
               <button
@@ -362,7 +363,6 @@ export default function Sidebar({
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
-              {verticalIconRail}
               {expandedMenuPanel}
             </div>
           </div>
@@ -370,19 +370,15 @@ export default function Sidebar({
       )}
 
       {/* ================================================================== */}
-      {/* B. DESKTOP SIDEBAR (Full Option C when open, Icon-only when closed) */}
+      {/* B. DESKTOP SIDEBAR: Single Unified Sidebar (Icon rail OR Full Menu) */}
       {/* ================================================================== */}
       <aside
         className={`hidden lg:flex flex-col p-3 transition-all duration-300 flex-shrink-0 font-sans h-screen ${
-          isCollapsed ? "w-[88px]" : "w-72 xl:w-80"
+          isCollapsed ? "w-[88px]" : "w-64 xl:w-72"
         }`}
       >
         <div className="flex h-full w-full select-none overflow-hidden rounded-[26px] border border-[#e2e8f0] bg-white shadow-xl shadow-slate-900/5">
-          {/* Always visible: Vertical Midnight Rail */}
-          {verticalIconRail}
-
-          {/* Conditionally visible: Expanded Right Pure White Menu Panel */}
-          {!isCollapsed && expandedMenuPanel}
+          {isCollapsed ? verticalIconRail : expandedMenuPanel}
         </div>
       </aside>
     </>

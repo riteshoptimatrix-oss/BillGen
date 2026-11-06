@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, Request, HTTPException, Body, Depends, status
 from typing import Dict, Any, List
 from bson import ObjectId
@@ -8,9 +9,13 @@ router = APIRouter(prefix="/api/finance", tags=["finance"], dependencies=[Depend
 
 @router.get("/overview", response_description="Get Finance aggregated summary for Sales and Purchases")
 async def get_finance_overview(request: Request) -> Dict[str, Any]:
-    # 1. Fetch Invoices for Sales
-    invoices_cursor = request.app.mongodb["invoices"].find({})
-    invoices = await invoices_cursor.to_list(1000)
+    db = request.app.mongodb
+    
+    # Run invoices and purchases concurrently with lean projections
+    invoices, purchases = await asyncio.gather(
+        db["invoices"].find({}, {"amount": 1, "status": 1}).to_list(1000),
+        db["purchases"].find({}, {"amount": 1, "status": 1}).to_list(1000)
+    )
     
     total_sales = 0.0
     paid_sales = 0.0
@@ -25,10 +30,6 @@ async def get_finance_overview(request: Request) -> Dict[str, Any]:
         else:
             pending_sales += amt
 
-    # 2. Fetch Purchases
-    purchases_cursor = request.app.mongodb["purchases"].find({})
-    purchases = await purchases_cursor.to_list(1000)
-    
     total_purchases = 0.0
     paid_purchases = 0.0
     pending_purchases = 0.0
@@ -58,7 +59,8 @@ async def get_finance_overview(request: Request) -> Dict[str, Any]:
 
 @router.get("/sales", response_description="Get all Sales records derived directly from Invoices")
 async def get_sales_records(request: Request) -> List[Dict[str, Any]]:
-    invoices = await request.app.mongodb["invoices"].find().sort("_id", -1).to_list(1000)
+    # Exclude heavy pdf_base64 payload
+    invoices = await request.app.mongodb["invoices"].find({}, {"pdf_base64": 0}).sort("_id", -1).to_list(1000)
     current_year = datetime.now().year
     
     sales_records = []

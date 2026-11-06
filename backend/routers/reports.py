@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, Request, Query, Depends
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, date
@@ -41,7 +42,8 @@ async def get_sales_register(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
 ) -> Dict[str, Any]:
-    invoices = await request.app.mongodb["invoices"].find().sort("date", -1).to_list(1000)
+    # Exclude heavy pdf_base64
+    invoices = await request.app.mongodb["invoices"].find({}, {"pdf_base64": 0}).sort("date", -1).to_list(1000)
     current_year = datetime.now().year
 
     # Ensure all invoices have invoice_number and proper fields
@@ -197,8 +199,10 @@ async def get_gst_summary(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
 ) -> Dict[str, Any]:
-    invoices = await request.app.mongodb["invoices"].find().to_list(1000)
-    purchases = await request.app.mongodb["purchases"].find().to_list(1000)
+    invoices, purchases = await asyncio.gather(
+        request.app.mongodb["invoices"].find({}, {"pdf_base64": 0}).to_list(1000),
+        request.app.mongodb["purchases"].find().to_list(1000)
+    )
 
     # Filter by date
     filtered_invoices = filter_records_by_date(invoices, "date", filter, start_date, end_date)
@@ -374,10 +378,12 @@ async def get_profit_and_loss(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
 ) -> Dict[str, Any]:
-    invoices = await request.app.mongodb["invoices"].find().to_list(1000)
-    purchases = await request.app.mongodb["purchases"].find().to_list(1000)
-    expenses = await request.app.mongodb["expenses"].find().to_list(1000)
-    labours = await request.app.mongodb["labours"].find().to_list(1000)
+    invoices, purchases, expenses, labours = await asyncio.gather(
+        request.app.mongodb["invoices"].find({}, {"pdf_base64": 0}).to_list(1000),
+        request.app.mongodb["purchases"].find().to_list(1000),
+        request.app.mongodb["expenses"].find().to_list(1000),
+        request.app.mongodb["labours"].find().to_list(1000)
+    )
 
     # Filter by date
     filtered_invoices = filter_records_by_date(invoices, "date", filter, start_date, end_date)
