@@ -2,22 +2,27 @@ import html2canvas from "html2canvas-pro";
 import { jsPDF } from "jspdf";
 
 /**
- * Robust PDF Generation Utility using html2canvas-pro + jsPDF.
+ * Robust Single-Page A4 PDF Generation Utility using html2canvas-pro + jsPDF.
  * 
- * html2canvas-pro natively parses modern CSS color spaces including:
- * lab(), lch(), oklab(), oklch(), and color(srgb/p3).
+ * - html2canvas-pro natively parses modern CSS color spaces.
+ * - Guarantees strict single-page output matching the exact reference invoice design.
  */
 
-async function preparePDFDoc(element: HTMLElement): Promise<{ pdf: jsPDF } | null> {
+async function preparePDFDoc(
+  element: HTMLElement,
+  forceSinglePage = true
+): Promise<{ pdf: jsPDF } | null> {
   if (typeof window === "undefined" || !element) return null;
 
   // Clone target to render at crisp A4 printable dimensions (210mm = ~794px @ 96dpi)
   const clone = element.cloneNode(true) as HTMLElement;
   clone.style.transform = "none";
   clone.style.margin = "0";
-  clone.style.padding = "24px";
+  clone.style.padding = "0";
   clone.style.boxShadow = "none";
   clone.style.width = "794px";
+  clone.style.minHeight = "1123px";
+  clone.style.maxHeight = "1123px";
   clone.style.position = "fixed";
   clone.style.top = "-99999px";
   clone.style.left = "-99999px";
@@ -35,7 +40,7 @@ async function preparePDFDoc(element: HTMLElement): Promise<{ pdf: jsPDF } | nul
         return new Promise<void>((resolve) => {
           img.onload = () => resolve();
           img.onerror = () => resolve();
-          // Timeout after 1.5 seconds so PDF generation proceeds smoothly even on slow networks
+          // Timeout after 1.5 seconds so PDF generation proceeds smoothly
           setTimeout(resolve, 1500);
         });
       })
@@ -49,14 +54,15 @@ async function preparePDFDoc(element: HTMLElement): Promise<{ pdf: jsPDF } | nul
       scrollY: 0,
       scrollX: 0,
       windowWidth: 794,
+      windowHeight: 1123,
       backgroundColor: "#ffffff",
       onclone: (clonedDoc: Document) => {
-        // Ensure all cloned elements have solid readable backgrounds and no conflicting modern color glitches
         const el = clonedDoc.querySelector("[data-invoice-root]") as HTMLElement;
         if (el) {
           el.style.backgroundColor = "#ffffff";
+          el.style.width = "794px";
+          el.style.height = "1123px";
         }
-        // Force crossOrigin on all cloned image elements
         const imgs = clonedDoc.querySelectorAll("img");
         imgs.forEach((img) => {
           img.crossOrigin = "anonymous";
@@ -71,12 +77,13 @@ async function preparePDFDoc(element: HTMLElement): Promise<{ pdf: jsPDF } | nul
     });
 
     const imgData = canvas.toDataURL("image/jpeg", 0.98);
-    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfWidth = pdf.internal.pageSize.getWidth(); // 210mm
     const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+    const pageHeight = pdf.internal.pageSize.getHeight(); // 297mm
 
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    if (pdfHeight <= pageHeight) {
-      pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight);
+    if (forceSinglePage || pdfHeight <= pageHeight + 8) {
+      // Fit to exactly one single page!
+      pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pageHeight);
     } else {
       let heightLeft = pdfHeight;
       let position = 0;
@@ -98,9 +105,13 @@ async function preparePDFDoc(element: HTMLElement): Promise<{ pdf: jsPDF } | nul
   }
 }
 
-export async function exportElementToPDF(element: HTMLElement, filename: string): Promise<void> {
+export async function exportElementToPDF(
+  element: HTMLElement,
+  filename: string,
+  forceSinglePage = true
+): Promise<void> {
   try {
-    const result = await preparePDFDoc(element);
+    const result = await preparePDFDoc(element, forceSinglePage);
     if (result) {
       result.pdf.save(filename);
     }
@@ -110,9 +121,13 @@ export async function exportElementToPDF(element: HTMLElement, filename: string)
   }
 }
 
-export async function generatePDFFile(element: HTMLElement, filename: string): Promise<File | null> {
+export async function generatePDFFile(
+  element: HTMLElement,
+  filename: string,
+  forceSinglePage = true
+): Promise<File | null> {
   try {
-    const result = await preparePDFDoc(element);
+    const result = await preparePDFDoc(element, forceSinglePage);
     if (!result) return null;
     const blob = result.pdf.output("blob");
     return new File([blob], filename, { type: "application/pdf" });

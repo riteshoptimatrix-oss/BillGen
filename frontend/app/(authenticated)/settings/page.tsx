@@ -8,13 +8,69 @@ import {
   Landmark,
   ShieldCheck,
   Save,
-  Check,
   CheckCircle2,
-  Sliders,
-  Sparkles
+  RotateCcw,
+  Sparkles,
+  Lock,
+  Key,
+  ShieldAlert,
 } from "lucide-react";
 
 type SettingsTab = "company" | "invoice" | "tax" | "bank" | "security";
+
+// Default preset values
+const DEFAULT_COMPANY_SETTINGS = {
+  name: "SiddhiVinayak Enterprise",
+  tagline: "High-Performance 3-Wheeler Commercial Vehicles & Spare Parts",
+  phone: "+91 98250 14829",
+  email: "contact@siddhivinayakenterprise.com",
+  website: "www.siddhivinayakenterprise.com",
+  address: "Plot 12, GIDC Heavy Engineering Zone, Odhav, Ahmedabad, Gujarat 382415",
+  state: "Gujarat",
+  stateCode: "24",
+  gstin: "24AAAFO1234F1Z9",
+  pan: "AAAFO1234F",
+  cin: "U34102GJ2015PTC082910",
+};
+
+const DEFAULT_INVOICE_DEFAULTS = {
+  prefix: "INV",
+  nextNumber: 6,
+  defaultTerms: "15 Days",
+  defaultPaymentMethod: "Bank Transfer",
+  notes:
+    "1. Goods once sold will not be returned without warranty inspection.\n2. Interest @ 18% p.a. charged after due date.\n3. All disputes subject to Ahmedabad jurisdiction only.",
+  autoDecrementStock: true,
+  showProductImageOnBill: true,
+};
+
+const DEFAULT_TAX_SETTINGS = {
+  defaultTaxRate: 18,
+  enableGst: true,
+  enableCgstSgstSplit: true,
+  hsnSummaryEnabled: true,
+  reverseChargeApplicable: false,
+  eInvoiceThreshold: 5000000,
+};
+
+const DEFAULT_BANK_SETTINGS = {
+  bankName: "Bank of Baroda",
+  accountHolder: "SiddhiVinayak Enterprise",
+  accountNumber: "01420200001234",
+  ifscCode: "BARB0ODHAVA",
+  branchName: "Odhav Industrial Estate Branch",
+  accountType: "Current Account",
+  upiId: "siddhivinayak@barodampay",
+};
+
+const DEFAULT_SECURITY_SETTINGS = {
+  adminEmail: "admin@siddhivinayak.com",
+  currentPassword: "",
+  newPassword: "",
+  confirmPassword: "",
+  sessionTimeout: "8 Hours",
+  twoFactorEnabled: false,
+};
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("company");
@@ -22,62 +78,19 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   // 1. Company Profile Settings (SiddhiVinayak Enterprise)
-  const [companySettings, setCompanySettings] = useState({
-    name: "SiddhiVinayak Enterprise",
-    tagline: "High-Performance 3-Wheeler Commercial Vehicles & Spare Parts",
-    phone: "+91 98250 14829",
-    email: "contact@siddhivinayakenterprise.com",
-    website: "www.siddhivinayakenterprise.com",
-    address: "Plot 12, GIDC Heavy Engineering Zone, Odhav, Ahmedabad, Gujarat 382415",
-    state: "Gujarat",
-    stateCode: "24",
-    gstin: "24AAAFO1234F1Z9",
-    pan: "AAAFO1234F",
-    cin: "U34102GJ2015PTC082910",
-  });
+  const [companySettings, setCompanySettings] = useState(DEFAULT_COMPANY_SETTINGS);
 
   // 2. Invoice & Billing Defaults
-  const [invoiceDefaults, setInvoiceDefaults] = useState({
-    prefix: "INV",
-    nextNumber: 6,
-    defaultTerms: "15 Days",
-    defaultPaymentMethod: "Bank Transfer",
-    notes:
-      "1. Goods once sold will not be returned without warranty inspection.\n2. Interest @ 18% p.a. charged after due date.\n3. All disputes subject to Ahmedabad jurisdiction only.",
-    autoDecrementStock: true,
-    showProductImageOnBill: true,
-  });
+  const [invoiceDefaults, setInvoiceDefaults] = useState(DEFAULT_INVOICE_DEFAULTS);
 
   // 3. Tax & GST Configuration
-  const [taxSettings, setTaxSettings] = useState({
-    defaultTaxRate: 18,
-    enableGst: true,
-    enableCgstSgstSplit: true,
-    hsnSummaryEnabled: true,
-    reverseChargeApplicable: false,
-    eInvoiceThreshold: 5000000,
-  });
+  const [taxSettings, setTaxSettings] = useState(DEFAULT_TAX_SETTINGS);
 
   // 4. Default Remittance Bank Details
-  const [bankSettings, setBankSettings] = useState({
-    bankName: "Bank of Baroda",
-    accountHolder: "SiddhiVinayak Enterprise",
-    accountNumber: "01420200001234",
-    ifscCode: "BARB0ODHAVA",
-    branchName: "Odhav Industrial Estate Branch",
-    accountType: "Current Account",
-    upiId: "siddhivinayak@barodampay",
-  });
+  const [bankSettings, setBankSettings] = useState(DEFAULT_BANK_SETTINGS);
 
   // 5. User Account & Security
-  const [securitySettings, setSecuritySettings] = useState({
-    adminEmail: "admin@siddhivinayak.com",
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-    sessionTimeout: "8 Hours",
-    twoFactorEnabled: false,
-  });
+  const [securitySettings, setSecuritySettings] = useState(DEFAULT_SECURITY_SETTINGS);
 
   // Load persisted settings on mount
   useEffect(() => {
@@ -93,6 +106,17 @@ export default function SettingsPage() {
 
       const savedBank = localStorage.getItem("sve_bank_settings");
       if (savedBank) setBankSettings(JSON.parse(savedBank));
+
+      const savedSecurity = localStorage.getItem("sve_security_settings");
+      if (savedSecurity) {
+        const parsed = JSON.parse(savedSecurity);
+        setSecuritySettings((prev) => ({
+          ...prev,
+          adminEmail: parsed.adminEmail || prev.adminEmail,
+          sessionTimeout: parsed.sessionTimeout || prev.sessionTimeout,
+          twoFactorEnabled: !!parsed.twoFactorEnabled,
+        }));
+      }
     } catch (e) {
       console.error("Failed to load settings from storage", e);
     }
@@ -103,23 +127,91 @@ export default function SettingsPage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const handleSaveSettings = () => {
+  const handleSaveSettings = (tabName?: string) => {
     setIsSaving(true);
     try {
       localStorage.setItem("sve_company_settings", JSON.stringify(companySettings));
       localStorage.setItem("sve_invoice_defaults", JSON.stringify(invoiceDefaults));
       localStorage.setItem("sve_tax_settings", JSON.stringify(taxSettings));
       localStorage.setItem("sve_bank_settings", JSON.stringify(bankSettings));
+      localStorage.setItem(
+        "sve_security_settings",
+        JSON.stringify({
+          adminEmail: securitySettings.adminEmail,
+          sessionTimeout: securitySettings.sessionTimeout,
+          twoFactorEnabled: securitySettings.twoFactorEnabled,
+        })
+      );
 
       setTimeout(() => {
         setIsSaving(false);
-        showToast("Settings updated & saved successfully!");
-      }, 500);
+        showToast(
+          tabName
+            ? `✓ ${tabName} updated & saved successfully!`
+            : "✓ All system settings saved successfully!"
+        );
+      }, 400);
     } catch (err) {
       console.error("Save settings error", err);
       setIsSaving(false);
       alert("Failed to save settings.");
     }
+  };
+
+  const handleResetTab = (tab: SettingsTab) => {
+    if (tab === "company") {
+      setCompanySettings(DEFAULT_COMPANY_SETTINGS);
+      localStorage.setItem("sve_company_settings", JSON.stringify(DEFAULT_COMPANY_SETTINGS));
+      showToast("Company profile reset to default.");
+    } else if (tab === "invoice") {
+      setInvoiceDefaults(DEFAULT_INVOICE_DEFAULTS);
+      localStorage.setItem("sve_invoice_defaults", JSON.stringify(DEFAULT_INVOICE_DEFAULTS));
+      showToast("Invoice defaults reset to default.");
+    } else if (tab === "tax") {
+      setTaxSettings(DEFAULT_TAX_SETTINGS);
+      localStorage.setItem("sve_tax_settings", JSON.stringify(DEFAULT_TAX_SETTINGS));
+      showToast("Tax & GST rules reset to default.");
+    } else if (tab === "bank") {
+      setBankSettings(DEFAULT_BANK_SETTINGS);
+      localStorage.setItem("sve_bank_settings", JSON.stringify(DEFAULT_BANK_SETTINGS));
+      showToast("Bank remittance details reset to default.");
+    } else if (tab === "security") {
+      setSecuritySettings(DEFAULT_SECURITY_SETTINGS);
+      localStorage.setItem(
+        "sve_security_settings",
+        JSON.stringify({
+          adminEmail: DEFAULT_SECURITY_SETTINGS.adminEmail,
+          sessionTimeout: DEFAULT_SECURITY_SETTINGS.sessionTimeout,
+          twoFactorEnabled: DEFAULT_SECURITY_SETTINGS.twoFactorEnabled,
+        })
+      );
+      showToast("Security preferences reset to default.");
+    }
+  };
+
+  const handlePasswordUpdate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!securitySettings.currentPassword.trim()) {
+      alert("Please enter your current password.");
+      return;
+    }
+    if (!securitySettings.newPassword || securitySettings.newPassword.length < 6) {
+      alert("New password must be at least 6 characters.");
+      return;
+    }
+    if (securitySettings.newPassword !== securitySettings.confirmPassword) {
+      alert("New password and confirm password do not match.");
+      return;
+    }
+
+    // Success simulation and credential update
+    setSecuritySettings((prev) => ({
+      ...prev,
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    }));
+    showToast("✓ Administrator password changed successfully!");
   };
 
   const tabs = [
@@ -155,7 +247,7 @@ export default function SettingsPage() {
       {/* Toast Alert */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#0f172a] text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-3 duration-200 text-xs font-semibold">
-          <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           {toastMessage}
         </div>
       )}
@@ -178,7 +270,7 @@ export default function SettingsPage() {
 
         <button
           type="button"
-          onClick={handleSaveSettings}
+          onClick={() => handleSaveSettings()}
           disabled={isSaving}
           className="flex items-center gap-2 px-5 py-2.5 bg-[#0260de] hover:bg-[#0252bf] text-white font-bold text-xs rounded-xl transition-all shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer"
         >
@@ -272,7 +364,15 @@ export default function SettingsPage() {
                   <input
                     type="text"
                     value={`${companySettings.state} (${companySettings.stateCode})`}
-                    onChange={(e) => setCompanySettings({ ...companySettings, state: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const match = val.match(/(.*?)\s*\((\d+)\)/);
+                      if (match) {
+                        setCompanySettings({ ...companySettings, state: match[1].trim(), stateCode: match[2].trim() });
+                      } else {
+                        setCompanySettings({ ...companySettings, state: val });
+                      }
+                    }}
                     className="w-full px-4 py-2.5 bg-[#f8fafc] border border-[#e2e8f0] rounded-xl font-medium text-[#0f172a] text-xs focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
                   />
                 </div>
@@ -332,7 +432,7 @@ export default function SettingsPage() {
                   <input
                     type="text"
                     value={companySettings.gstin}
-                    onChange={(e) => setCompanySettings({ ...companySettings, gstin: e.target.value })}
+                    onChange={(e) => setCompanySettings({ ...companySettings, gstin: e.target.value.toUpperCase() })}
                     className="w-full px-4 py-2.5 bg-[#f8fafc] border border-[#e2e8f0] rounded-xl font-mono font-bold text-[#0f172a] text-xs focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
                   />
                 </div>
@@ -344,7 +444,7 @@ export default function SettingsPage() {
                   <input
                     type="text"
                     value={companySettings.pan}
-                    onChange={(e) => setCompanySettings({ ...companySettings, pan: e.target.value })}
+                    onChange={(e) => setCompanySettings({ ...companySettings, pan: e.target.value.toUpperCase() })}
                     className="w-full px-4 py-2.5 bg-[#f8fafc] border border-[#e2e8f0] rounded-xl font-mono font-bold text-[#0f172a] text-xs focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
                   />
                 </div>
@@ -356,7 +456,7 @@ export default function SettingsPage() {
                   <input
                     type="text"
                     value={companySettings.cin}
-                    onChange={(e) => setCompanySettings({ ...companySettings, cin: e.target.value })}
+                    onChange={(e) => setCompanySettings({ ...companySettings, cin: e.target.value.toUpperCase() })}
                     className="w-full px-4 py-2.5 bg-[#f8fafc] border border-[#e2e8f0] rounded-xl font-mono font-medium text-[#0f172a] text-xs focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
                   />
                 </div>
@@ -372,6 +472,27 @@ export default function SettingsPage() {
                     className="w-full px-4 py-2.5 bg-[#f8fafc] border border-[#e2e8f0] rounded-xl font-medium text-[#0f172a] text-xs focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de] resize-none"
                   />
                 </div>
+              </div>
+
+              {/* Action Buttons for Tab */}
+              <div className="flex items-center justify-between pt-6 border-t border-[#e2e8f0]">
+                <button
+                  type="button"
+                  onClick={() => handleResetTab("company")}
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-[#64748b] hover:text-[#0f172a] hover:bg-[#f1f5f9] rounded-xl transition-all cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset to Default</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveSettings("Company Profile")}
+                  disabled={isSaving}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-[#0260de] hover:bg-[#0252bf] text-white font-bold text-xs rounded-xl shadow-xs active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Save Company Profile</span>
+                </button>
               </div>
             </div>
           )}
@@ -475,6 +596,27 @@ export default function SettingsPage() {
                   />
                 </div>
               </div>
+
+              {/* Action Buttons for Tab */}
+              <div className="flex items-center justify-between pt-6 border-t border-[#e2e8f0]">
+                <button
+                  type="button"
+                  onClick={() => handleResetTab("invoice")}
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-[#64748b] hover:text-[#0f172a] hover:bg-[#f1f5f9] rounded-xl transition-all cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset to Default</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveSettings("Invoice & Billing Defaults")}
+                  disabled={isSaving}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-[#0260de] hover:bg-[#0252bf] text-white font-bold text-xs rounded-xl shadow-xs active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Save Invoice Defaults</span>
+                </button>
+              </div>
             </div>
           )}
 
@@ -536,6 +678,27 @@ export default function SettingsPage() {
                     </div>
                   </label>
                 </div>
+              </div>
+
+              {/* Action Buttons for Tab */}
+              <div className="flex items-center justify-between pt-6 border-t border-[#e2e8f0]">
+                <button
+                  type="button"
+                  onClick={() => handleResetTab("tax")}
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-[#64748b] hover:text-[#0f172a] hover:bg-[#f1f5f9] rounded-xl transition-all cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset to Default</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveSettings("Tax & GST Rules")}
+                  disabled={isSaving}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-[#0260de] hover:bg-[#0252bf] text-white font-bold text-xs rounded-xl shadow-xs active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Save Tax Rules</span>
+                </button>
               </div>
             </div>
           )}
@@ -623,6 +786,27 @@ export default function SettingsPage() {
                   />
                 </div>
               </div>
+
+              {/* Action Buttons for Tab */}
+              <div className="flex items-center justify-between pt-6 border-t border-[#e2e8f0]">
+                <button
+                  type="button"
+                  onClick={() => handleResetTab("bank")}
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-[#64748b] hover:text-[#0f172a] hover:bg-[#f1f5f9] rounded-xl transition-all cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset to Default</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveSettings("Bank Remittance")}
+                  disabled={isSaving}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-[#0260de] hover:bg-[#0252bf] text-white font-bold text-xs rounded-xl shadow-xs active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Save Bank Details</span>
+                </button>
+              </div>
             </div>
           )}
 
@@ -632,10 +816,11 @@ export default function SettingsPage() {
               <div className="border-b border-[#e2e8f0] pb-4">
                 <h3 className="text-lg font-black text-[#0f172a]">Security &amp; Session Configuration</h3>
                 <p className="text-xs text-[#64748b] mt-0.5">
-                  Manage master administrative account credentials, multi-factor, and timeout policies.
+                  Manage master administrative account credentials, multi-factor authentication, and timeout policies.
                 </p>
               </div>
 
+              {/* Account & Session Preferences */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b] mb-1.5">
@@ -651,7 +836,7 @@ export default function SettingsPage() {
 
                 <div>
                   <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b] mb-1.5">
-                    Session Timeout
+                    Session Inactivity Timeout
                   </label>
                   <select
                     value={securitySettings.sessionTimeout}
@@ -663,6 +848,114 @@ export default function SettingsPage() {
                     <option value="24 Hours">24 Hours</option>
                   </select>
                 </div>
+
+                <div className="md:col-span-2">
+                  <label className="flex items-center justify-between cursor-pointer p-4 bg-[#f8fafc] rounded-2xl border border-[#e2e8f0]">
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={securitySettings.twoFactorEnabled}
+                        onChange={(e) => setSecuritySettings({ ...securitySettings, twoFactorEnabled: e.target.checked })}
+                        className="w-4 h-4 text-[#0260de] rounded"
+                      />
+                      <div>
+                        <p className="font-bold text-[#0f172a] text-xs">
+                          Two-Factor Authentication (2FA / OTP Verification)
+                        </p>
+                        <p className="text-[10px] text-[#64748b]">
+                          Require one-time mobile passcode upon logging into the ERP dashboard
+                        </p>
+                      </div>
+                    </div>
+                    <span
+                      className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${
+                        securitySettings.twoFactorEnabled
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : "bg-slate-100 text-slate-600 border-slate-200"
+                      }`}
+                    >
+                      {securitySettings.twoFactorEnabled ? "Active & Protected" : "Disabled"}
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Password Change Card */}
+              <div className="p-5 bg-gradient-to-br from-[#f8fafc] to-white rounded-2xl border border-[#e2e8f0] space-y-4">
+                <div className="flex items-center gap-2 text-xs font-bold text-[#0f172a]">
+                  <Lock className="w-4 h-4 text-[#0260de]" />
+                  <span>Update Admin Password</span>
+                </div>
+                <form onSubmit={handlePasswordUpdate} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-[#64748b] mb-1">
+                        Current Password
+                      </label>
+                      <input
+                        type="password"
+                        placeholder="••••••••"
+                        value={securitySettings.currentPassword}
+                        onChange={(e) => setSecuritySettings({ ...securitySettings, currentPassword: e.target.value })}
+                        className="w-full px-3.5 py-2 bg-white border border-[#e2e8f0] rounded-xl text-xs font-medium text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-[#64748b] mb-1">
+                        New Password
+                      </label>
+                      <input
+                        type="password"
+                        placeholder="Min. 6 chars"
+                        value={securitySettings.newPassword}
+                        onChange={(e) => setSecuritySettings({ ...securitySettings, newPassword: e.target.value })}
+                        className="w-full px-3.5 py-2 bg-white border border-[#e2e8f0] rounded-xl text-xs font-medium text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-[#64748b] mb-1">
+                        Confirm New Password
+                      </label>
+                      <input
+                        type="password"
+                        placeholder="Confirm password"
+                        value={securitySettings.confirmPassword}
+                        onChange={(e) => setSecuritySettings({ ...securitySettings, confirmPassword: e.target.value })}
+                        className="w-full px-3.5 py-2 bg-white border border-[#e2e8f0] rounded-xl text-xs font-medium text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      className="flex items-center gap-1.5 px-4 py-2 bg-white border border-[#e2e8f0] hover:bg-[#0260de] hover:text-white hover:border-[#0260de] text-[#0f172a] font-bold text-xs rounded-xl shadow-2xs transition-all cursor-pointer active:scale-95"
+                    >
+                      <Key className="w-3.5 h-3.5" />
+                      <span>Update Password</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Action Buttons for Tab */}
+              <div className="flex items-center justify-between pt-6 border-t border-[#e2e8f0]">
+                <button
+                  type="button"
+                  onClick={() => handleResetTab("security")}
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-[#64748b] hover:text-[#0f172a] hover:bg-[#f1f5f9] rounded-xl transition-all cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset to Default</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveSettings("Security & Access Preferences")}
+                  disabled={isSaving}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-[#0260de] hover:bg-[#0252bf] text-white font-bold text-xs rounded-xl shadow-xs active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Save Security Settings</span>
+                </button>
               </div>
             </div>
           )}

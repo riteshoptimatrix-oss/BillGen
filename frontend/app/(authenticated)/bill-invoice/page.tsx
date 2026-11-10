@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { getApiUrl, formatImageUrl, getAuthToken } from "@/lib/api";
 import { exportElementToPDF, generatePDFFile } from "@/lib/pdf";
+import InvoicePrintDocument from "@/components/invoice/InvoicePrintDocument";
 
 interface InvoiceItem {
   product_id?: string;
@@ -162,11 +163,102 @@ export default function BillInvoicePage() {
   const [isDownloading, setIsDownloading] = useState(false);
 
   // WhatsApp Share State
+  type WhatsAppTemplateType = "ALL" | "PAID" | "PENDING" | "OVERDUE";
   const [whatsappInvoice, setWhatsappInvoice] = useState<Invoice | null>(null);
   const [whatsappPhone, setWhatsappPhone] = useState("");
   const [whatsappMessage, setWhatsappMessage] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState<WhatsAppTemplateType>("ALL");
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
-  const [selectedShareCustomerId, setSelectedShareCustomerId] = useState<string>("");
+
+  const buildWhatsAppMessage = (inv: Invoice, template: WhatsAppTemplateType): string => {
+    const clientName = inv.client || "Valued Customer";
+    const invNumber = inv.invoice_number || "INV";
+    const invDate = inv.date || new Date().toISOString().split("T")[0];
+    const dueDate = inv.due_date || "Immediate";
+    const grandTotal = inv.amount || 0;
+    const paidAmount = inv.amount_paid ?? (inv.status === "Paid" ? grandTotal : 0);
+    const balance = inv.balance_due ?? (inv.status === "Paid" ? 0 : Math.max(0, grandTotal - paidAmount));
+
+    const cleanNum = (inv.invoice_number || "").replace(/[^A-Za-z0-9_-]/g, "_");
+    const defaultPdfUrl = (inv as any).pdf_url
+      ? formatImageUrl((inv as any).pdf_url)
+      : `https://billgen-32uc.onrender.com/uploads/invoices/Invoice_${cleanNum}.pdf`;
+
+    switch (template) {
+      case "PAID":
+        return (
+          `*PAYMENT RECEIPT & CONFIRMATION* ✅\n\n` +
+          `Dear *${clientName}*,\n\n` +
+          `We are pleased to confirm that payment for your invoice has been received in full.\n\n` +
+          `🧾 *Invoice No.:* ${invNumber}\n` +
+          `📅 *Invoice Date:* ${invDate}\n` +
+          `💰 *Total Amount:* ₹${grandTotal.toLocaleString("en-IN")}\n` +
+          `💵 *Amount Received:* ₹${grandTotal.toLocaleString("en-IN")}\n` +
+          `✅ *Status:* PAID (Zero Balance Due)\n\n` +
+          `📄 *Download Tax Invoice & Receipt (PDF):*\n` +
+          `${defaultPdfUrl}\n\n` +
+          `Thank you for your prompt payment and continued partnership with *SiddhiVinayak Enterprise*! 🙏\n\n` +
+          `Warm regards,\n` +
+          `*SiddhiVinayak Enterprise*`
+        );
+
+      case "PENDING":
+        return (
+          `*PAYMENT REMINDER* ⏳\n\n` +
+          `Dear *${clientName}*,\n\n` +
+          `Greetings from *SiddhiVinayak Enterprise*.\n` +
+          `This is a gentle reminder regarding Invoice *#${invNumber}* which is currently pending payment.\n\n` +
+          `🧾 *Invoice No.:* ${invNumber}\n` +
+          `📅 *Invoice Date:* ${invDate}\n` +
+          `⏰ *Payment Due Date:* ${dueDate}\n` +
+          `💰 *Total Invoice Amount:* ₹${grandTotal.toLocaleString("en-IN")}\n` +
+          (paidAmount > 0 ? `💵 *Amount Paid:* ₹${paidAmount.toLocaleString("en-IN")}\n` : "") +
+          `⚠️ *Remaining Balance Due:* ₹${balance.toLocaleString("en-IN")}\n` +
+          `📌 *Status:* PENDING\n\n` +
+          `📄 *View / Download Invoice (PDF):*\n` +
+          `${defaultPdfUrl}\n\n` +
+          `Kindly process the payment by the due date. If you have already made the transfer, please disregard this reminder.\n\n` +
+          `Warm regards,\n` +
+          `*SiddhiVinayak Enterprise* 🙏`
+        );
+
+      case "OVERDUE":
+        return (
+          `*URGENT: OVERDUE PAYMENT NOTICE* 🚨\n\n` +
+          `Dear *${clientName}*,\n\n` +
+          `This is an urgent reminder that Invoice *#${invNumber}* dated *${invDate}* has exceeded its payment due date (*${dueDate}*) and remains UNPAID.\n\n` +
+          `🧾 *Invoice No.:* ${invNumber}\n` +
+          `📅 *Invoice Date:* ${invDate}\n` +
+          `⏰ *Due Date:* ${dueDate} (OVERDUE)\n` +
+          `🔴 *Overdue Amount Due:* ₹${balance.toLocaleString("en-IN")}\n` +
+          `📌 *Status:* OVERDUE\n\n` +
+          `📄 *Download Invoice Document (PDF):*\n` +
+          `${defaultPdfUrl}\n\n` +
+          `⚠️ *Notice:* As per our credit terms, delayed payments may attract interest charges @ 18% p.a. Kindly clear the pending balance immediately via UPI or Bank Transfer to avoid account restrictions.\n\n` +
+          `Please contact us immediately if you need assistance.\n` +
+          `*SiddhiVinayak Enterprise*`
+        );
+
+      case "ALL":
+      default:
+        return (
+          `*TAX INVOICE NOTIFICATION* 📄\n\n` +
+          `Dear *${clientName}*,\n\n` +
+          `Greetings from *SiddhiVinayak Enterprise*.\n` +
+          `Please find the invoice summary and official documentation for your vehicle parts & services below:\n\n` +
+          `🧾 *Invoice No.:* ${invNumber}\n` +
+          `📅 *Invoice Date:* ${invDate}\n` +
+          `💰 *Total Amount:* ₹${grandTotal.toLocaleString("en-IN")}\n` +
+          `📌 *Payment Status:* ${inv.status || "Pending"}\n` +
+          (balance > 0 ? `✅ *Balance Due:* ₹${balance.toLocaleString("en-IN")}\n` : `✅ *Balance Due:* ₹0 (Paid in Full)\n`) +
+          `\n📄 *Download Official Tax Invoice (PDF):*\n` +
+          `${defaultPdfUrl}\n\n` +
+          `Thank you for choosing *SiddhiVinayak Enterprise*. We appreciate your business and look forward to serving you again!\n\n` +
+          `Warm regards,\n` +
+          `*SiddhiVinayak Enterprise* 🙏`
+        );
+    }
+  };
 
   const findCustomerPhone = (inv: Invoice, custList: CustomerOption[] = customers): string => {
     // 1. Direct phone on invoice
@@ -175,11 +267,21 @@ export default function BillInvoicePage() {
       (inv as any).phone ||
       (inv as any).mobile_number ||
       (inv as any).mobile ||
+      (inv as any).customer_mobile ||
       ""
     ).trim();
     if (directPhone) return directPhone;
 
-    // 2. Match with loaded customers list
+    // 2. Match with loaded customers list by ID if available
+    const directId = (inv as any).customer_id || (inv as any).client_id || (inv as any).customerId;
+    if (directId && custList && custList.length > 0) {
+      const matchById = custList.find((c) => c._id === directId);
+      if (matchById && (matchById.mobile_number || (matchById as any).phone)) {
+        return (matchById.mobile_number || (matchById as any).phone || "").trim();
+      }
+    }
+
+    // 3. Match with loaded customers list by Name
     if (inv.client && custList && custList.length > 0) {
       const target = inv.client.trim().toLowerCase();
       // exact match
@@ -204,51 +306,18 @@ export default function BillInvoicePage() {
     setWhatsappInvoice(inv);
     const phone = findCustomerPhone(inv, customers);
     setWhatsappPhone(phone);
-    setSelectedShareCustomerId("");
 
-    const grandTotal = inv.amount || 0;
-    const balance = inv.balance_due ?? (inv.status !== "Paid" ? grandTotal : 0);
+    // Auto-select template based on invoice status
+    let initialTpl: WhatsAppTemplateType = "ALL";
+    const st = (inv.status || "").toUpperCase();
+    if (st === "PAID") initialTpl = "PAID";
+    else if (st === "PENDING") initialTpl = "PENDING";
+    else if (st === "OVERDUE") initialTpl = "OVERDUE";
+    else initialTpl = "ALL";
 
-    // Professional corporate message with zero-due dynamic template
-    const cleanNum = (inv.invoice_number || "").replace(/[^A-Za-z0-9_-]/g, "_");
-    const defaultPdfUrl = (inv as any).pdf_url
-      ? formatImageUrl((inv as any).pdf_url)
-      : `https://billgen-32uc.onrender.com/uploads/invoices/Invoice_${cleanNum}.pdf`;
-
-    const isZeroDue = balance <= 0 || (inv.status && inv.status.toLowerCase() === "paid");
-
-    const msg = isZeroDue
-      ? `Dear ${inv.client}\n\n` +
-        `Greetings from *SiddhiVinayak Enterprise*.\n\n` +
-        `Please find the details of your invoice below:\n\n` +
-        `📄 Download your invoice (PDF):\n` +
-        `${defaultPdfUrl}\n\n` +
-        `Thank you for your payment and for your continued trust in us. We look forward to working with you again.\n\n` +
-        `Warm regards,\n` +
-        `*SiddhiVinayak Enterprise* 🙏`
-      : `Dear ${inv.client}\n\n` +
-        `Greetings from *SiddhiVinayak Enterprise*.\n\n` +
-        `Please find the details of your invoice below:\n\n` +
-        `🧾 *Invoice No.:* ${inv.invoice_number}\n` +
-        `💰 *Total Amount:* ₹${grandTotal.toLocaleString("en-IN")}\n` +
-        `✅ *Amount Due:* ₹${balance.toLocaleString("en-IN")}\n` +
-        `📌 *Status:* ${inv.status}\n\n` +
-        `📄 Download your invoice (PDF):\n` +
-        `${defaultPdfUrl}\n\n` +
-        `Thank you for your payment and for your continued trust in us. We look forward to working with you again.\n\n` +
-        `Warm regards,\n` +
-        `*SiddhiVinayak Enterprise* 🙏`;
-
+    setSelectedTemplate(initialTpl);
+    const msg = buildWhatsAppMessage(inv, initialTpl);
     setWhatsappMessage(msg);
-  };
-
-  const handleShareCustomerSelect = (custId: string) => {
-    setSelectedShareCustomerId(custId);
-    const matched = customers.find((c) => c._id === custId);
-    if (matched && (matched.mobile_number || (matched as any).phone)) {
-      const p = (matched.mobile_number || (matched as any).phone || "").trim();
-      setWhatsappPhone(p);
-    }
   };
 
   // Option 2: Direct Chat with Phone Number (opens chat with short message + download link)
@@ -2039,257 +2108,55 @@ export default function BillInvoicePage() {
               </div>
             </div>
 
-            {/* PRINTABLE BILL DOCUMENT */}
-            <div ref={printAreaRef} className="space-y-6 text-xs text-gray-800 p-2 sm:p-4 bg-white print:p-0">
-              {/* Company & Invoice Header */}
-              <div className="flex justify-between items-start border-b border-[#e2e8f0] pb-4">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-7 h-7 rounded-lg bg-[#76c816] text-[#1e293b] flex items-center justify-center font-black text-sm">
-                      SV
-                    </div>
-                    <h2 className="text-xl font-black text-gray-900 tracking-tight">
-                      SiddhiVinayak Enterprise
-                    </h2>
-                  </div>
-                  <p className="text-gray-500 text-[11px]">High-Performance 3-Wheeler Commercial Vehicles &amp; Spare Parts</p>
-                  <p className="text-gray-500 text-[11px]">Plot 12, GIDC Heavy Engineering Zone, Odhav</p>
-                  <p className="text-gray-500 text-[11px]">Ahmedabad, Gujarat - 382415, India</p>
-                  <p className="text-gray-800 font-mono text-[11px] font-black mt-1">
-                    GSTIN: 24AAAFO1234F1Z9 · State Code: 24 (Gujarat)
-                  </p>
-                </div>
+            {/* PRINTABLE BILL DOCUMENT (MATCHING REFERENCE DESIGN) */}
+            <div className="overflow-x-auto flex justify-center py-4 bg-slate-100/70 rounded-2xl print:bg-white print:p-0">
+              <div
+                ref={printAreaRef}
+                className="shadow-xl bg-white origin-top print:shadow-none"
+                style={{
+                  width: "794px",
+                  height: "1123px",
+                  minHeight: "1123px",
+                  maxHeight: "1123px"
+                }}
+              >
+                <InvoicePrintDocument
+                  data={{
+                    invoice_number: viewInvoice.invoice_number,
+                    date: viewInvoice.date,
+                    due_date: viewInvoice.due_date,
+                    payment_terms: viewInvoice.payment_terms,
+                    payment_method: viewInvoice.payment_method,
+                    status: viewInvoice.status,
 
-                <div className="text-right">
-                  <span className="font-mono text-base font-black text-[#0260de] bg-red-50 px-3 py-1 rounded-lg border border-[#e2e8f0] inline-block">
-                    {viewInvoice.invoice_number}
-                  </span>
-                  <p className="text-gray-500 text-[11px] mt-2">
-                    Invoice Date: <strong className="text-gray-900">{viewInvoice.date}</strong>
-                  </p>
-                  <p className="text-gray-500 text-[11px]">
-                    Due Date: <strong className="text-gray-900">{viewInvoice.due_date || "-"}</strong>
-                  </p>
-                  <p className="text-gray-500 text-[11px]">
-                    Terms: <strong className="text-gray-900">{viewInvoice.payment_terms || "15 Days"}</strong>
-                  </p>
-                  <p className="text-gray-500 text-[11px]">
-                    Method: <strong className="text-gray-900">{viewInvoice.payment_method || "Bank Transfer"}</strong>
-                  </p>
-                  <div className="mt-2">{getStatusBadge(viewInvoice.status)}</div>
-                </div>
-              </div>
+                    client: viewInvoice.client,
+                    customer_phone: viewInvoice.customer_phone,
+                    customer_email: viewInvoice.customer_email,
+                    customer_gst: viewInvoice.customer_gst,
+                    customer_address: viewInvoice.customer_address,
 
-              {/* Bill To & Customer Bank Details */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-3.5 bg-gray-50/80 rounded-xl border border-[#e2e8f0]">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Billed To (Customer)</p>
-                  <h4 className="text-sm font-black text-gray-900 mt-0.5">{viewInvoice.client}</h4>
-                  {viewInvoice.customer_phone && (
-                    <p className="text-gray-600 text-[11px]">Phone: {viewInvoice.customer_phone}</p>
-                  )}
-                  {viewInvoice.customer_email && (
-                    <p className="text-gray-600 text-[11px]">Email: {viewInvoice.customer_email}</p>
-                  )}
-                  {viewInvoice.customer_gst && (
-                    <p className="text-gray-900 font-mono text-[11px] font-bold mt-0.5">
-                      Customer GSTIN: {viewInvoice.customer_gst}
-                    </p>
-                  )}
-                  {viewInvoice.customer_address && (
-                    <p className="text-gray-600 text-[11px] mt-1">{viewInvoice.customer_address}</p>
-                  )}
-                </div>
+                    items: viewInvoice.items,
 
-                <div className="p-3.5 bg-gray-50/80 rounded-xl border border-[#e2e8f0]">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">
-                    Customer Remittance Bank Details
-                  </p>
-                  {viewInvoice.bank_name ? (
-                    <>
-                      <h4 className="text-sm font-bold text-gray-900 mt-0.5">{viewInvoice.bank_name}</h4>
-                      <p className="text-gray-600 text-[11px]">
-                        Account Number: <strong className="font-mono text-gray-900">{viewInvoice.account_number}</strong>
-                      </p>
-                      <p className="text-gray-600 text-[11px]">
-                        IFSC Code: <strong className="font-mono text-gray-900">{viewInvoice.ifsc_code}</strong> · {viewInvoice.branch_name}
-                      </p>
-                      <p className="text-gray-600 text-[11px]">
-                        Beneficiary: {viewInvoice.account_holder_name} ({viewInvoice.account_type || "Current"})
-                      </p>
-                    </>
-                  ) : (
-                    <p className="text-gray-400 italic text-[11px] mt-2">
-                      Standard corporate account remittance / Direct Bank Transfer.
-                    </p>
-                  )}
-                </div>
-              </div>
+                    subtotal: viewInvoice.subtotal ?? viewInvoice.amount,
+                    discount_amount: viewInvoice.discount_amount ?? 0,
+                    tax_percent: viewInvoice.tax_percent ?? 18,
+                    cgst_amount: viewInvoice.cgst_amount,
+                    sgst_amount: viewInvoice.sgst_amount,
+                    igst_amount: viewInvoice.igst_amount,
+                    amount: viewInvoice.amount,
+                    amount_paid: viewInvoice.amount_paid,
+                    balance_due: viewInvoice.balance_due,
 
-              {/* Items Breakdown Table with image + product name + description */}
-              <div className="border border-[#e2e8f0] rounded-xl overflow-hidden shadow-xs">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-[#1e293b] text-white uppercase font-black text-[10px]">
-                    <tr>
-                      <th className="py-2.5 px-3 text-center w-14">Sr. No</th>
-                      <th className="py-2.5 px-4 text-left">Product</th>
-                      <th className="py-2.5 px-4 text-right w-28">Price</th>
-                      <th className="py-2.5 px-3 text-center w-16">Qty</th>
-                      <th className="py-2.5 px-4 text-right w-28">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 bg-white">
-                    {viewInvoice.items && viewInvoice.items.length > 0 ? (
-                      viewInvoice.items.map((it, idx) => (
-                        <tr key={idx} className="hover:bg-gray-50/50">
-                          <td className="py-2 px-3 text-center text-gray-500 font-mono font-bold align-top pt-2.5">
-                            {idx + 1}
-                          </td>
-                          <td className="py-2 px-4 align-top">
-                            <div className="flex items-start gap-3">
-                              {it.image ? (
-                                <img
-                                  src={formatImageUrl(it.image)}
-                                  alt=""
-                                  crossOrigin="anonymous"
-                                  className="w-10 h-10 object-cover rounded-lg border border-[#e2e8f0] flex-shrink-0"
-                                  onError={(e) => {
-                                    const parent = (e.target as HTMLElement).parentElement;
-                                    if (parent) {
-                                      parent.innerHTML = '<div class="w-10 h-10 rounded-lg bg-gray-100 border border-[#e2e8f0] flex items-center justify-center text-xs flex-shrink-0">📦</div>';
-                                    }
-                                  }}
-                                />
-                              ) : (
-                                <div className="w-10 h-10 rounded-lg bg-gray-100 border border-[#e2e8f0] flex items-center justify-center text-xs flex-shrink-0">
-                                  📦
-                                </div>
-                              )}
-                              <div className="flex-1 min-w-0">
-                                <h4 className="font-extrabold text-gray-900 text-xs">
-                                  {it.product_name || it.description}
-                                </h4>
-                                {it.description && (
-                                  <p className="text-[10px] text-gray-500 mt-0.5 leading-snug">
-                                    {it.description}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-2 px-4 text-right font-mono font-semibold text-gray-800 align-top pt-2.5">
-                            ₹{it.unit_price.toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-2 px-3 text-center font-black text-gray-900 align-top pt-2.5">
-                            {it.quantity}
-                          </td>
-                          <td className="py-2 px-4 text-right font-black font-mono text-gray-950 align-top pt-2.5">
-                            ₹{it.total.toLocaleString("en-IN")}
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td className="py-3 px-3 text-center text-gray-400 font-mono">1</td>
-                        <td className="py-3 px-4 font-bold text-gray-900">
-                          Auto Rickshaw Chassis &amp; Component Assemblies
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono">₹{(viewInvoice.amount || 0).toLocaleString("en-IN")}</td>
-                        <td className="py-3 px-3 text-center font-black">1</td>
-                        <td className="py-3 px-4 text-right font-black font-mono text-gray-900">
-                          ₹{(viewInvoice.amount || 0).toLocaleString("en-IN")}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                    bank_name: viewInvoice.bank_name,
+                    account_holder_name: viewInvoice.account_holder_name,
+                    account_number: viewInvoice.account_number,
+                    ifsc_code: viewInvoice.ifsc_code,
+                    branch_name: viewInvoice.branch_name,
+                    account_type: viewInvoice.account_type,
 
-              {/* Calculations & Tax Breakdown */}
-              <div className="flex flex-col sm:flex-row justify-between items-start gap-4 pt-2">
-                <div className="space-y-2 max-w-sm text-gray-600 text-[11px]">
-                  {viewInvoice.notes && (
-                    <div className="p-3 bg-gray-50 rounded-xl border border-[#e2e8f0]">
-                      <p className="font-bold text-gray-800 text-[11px] mb-0.5">Special Instructions &amp; Terms:</p>
-                      <p className="italic">{viewInvoice.notes}</p>
-                    </div>
-                  )}
-
-                  <div className="text-[10px] text-gray-500 space-y-0.5">
-                    <p>• Interest @ 18% per annum will be charged if payment is delayed beyond the due date.</p>
-                    <p>• Subject to Ahmedabad, Gujarat jurisdiction only.</p>
-                  </div>
-                </div>
-
-                {/* Amount Totals Box */}
-                <div className="w-full sm:w-72 bg-gray-50/80 p-4 rounded-xl border border-[#e2e8f0] space-y-1.5 text-xs">
-                  <div className="flex justify-between text-gray-600">
-                    <span>Subtotal:</span>
-                    <span className="font-bold text-gray-900">
-                      ₹{(viewInvoice.subtotal || viewInvoice.amount).toLocaleString("en-IN")}
-                    </span>
-                  </div>
-
-                  {viewInvoice.discount_amount && viewInvoice.discount_amount > 0 ? (
-                    <div className="flex justify-between text-gray-600">
-                      <span>Discount:</span>
-                      <span className="font-bold text-rose-600">
-                        -₹{viewInvoice.discount_amount.toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                  ) : null}
-
-                  {viewInvoice.cgst_amount || viewInvoice.sgst_amount ? (
-                    <>
-                      <div className="flex justify-between text-emerald-700 text-[11px]">
-                        <span>CGST ({(viewInvoice.tax_percent || 18) / 2}%):</span>
-                        <span className="font-semibold">₹{(viewInvoice.cgst_amount || 0).toLocaleString("en-IN")}</span>
-                      </div>
-                      <div className="flex justify-between text-emerald-700 text-[11px]">
-                        <span>SGST ({(viewInvoice.tax_percent || 18) / 2}%):</span>
-                        <span className="font-semibold">₹{(viewInvoice.sgst_amount || 0).toLocaleString("en-IN")}</span>
-                      </div>
-                    </>
-                  ) : viewInvoice.igst_amount ? (
-                    <div className="flex justify-between text-blue-700 text-[11px]">
-                      <span>IGST ({viewInvoice.tax_percent || 18}%):</span>
-                      <span className="font-semibold">₹{viewInvoice.igst_amount.toLocaleString("en-IN")}</span>
-                    </div>
-                  ) : null}
-
-                  <div className="flex justify-between text-base font-black text-gray-900 border-t-2 border-gray-900 pt-2">
-                    <span>Grand Total:</span>
-                    <span className="text-[#0260de]">₹{(viewInvoice.amount || 0).toLocaleString("en-IN")}</span>
-                  </div>
-
-                  <div className="flex justify-between text-xs pt-1 border-t border-[#e2e8f0] font-semibold text-gray-700">
-                    <span>Amount Paid:</span>
-                    <span className="text-emerald-700">
-                      ₹{(viewInvoice.amount_paid ?? (viewInvoice.status === "Paid" ? viewInvoice.amount : 0)).toLocaleString("en-IN")}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between text-xs font-black text-amber-700">
-                    <span>Balance Due:</span>
-                    <span>
-                      ₹{(viewInvoice.balance_due ?? (viewInvoice.status !== "Paid" ? viewInvoice.amount : 0)).toLocaleString("en-IN")}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Signatures & Verification */}
-              <div className="pt-10 flex justify-between items-end border-t border-[#e2e8f0] text-xs">
-                <div>
-                  <p className="text-[10px] text-gray-400 uppercase tracking-wider">Receiver&apos;s Signature</p>
-                  <div className="w-44 border-b border-gray-300 mt-8"></div>
-                </div>
-
-                <div className="text-right">
-                  <p className="font-bold text-gray-900">For Opti Matrix Auto Rickshaw Mfg.</p>
-                  <div className="w-44 border-b border-gray-300 mt-8 ml-auto"></div>
-                  <p className="text-[10px] text-gray-400 uppercase tracking-wider mt-1">Authorized Signatory</p>
-                </div>
+                    notes: viewInvoice.notes
+                  }}
+                />
               </div>
             </div>
           </div>
@@ -2404,30 +2271,99 @@ export default function BillInvoicePage() {
                 />
               </div>
 
-              {customers.length > 0 && (
-                <div className="flex items-center gap-2 pt-0.5">
-                  <span className="text-[10px] font-semibold text-[#64748b] shrink-0">Or pick client:</span>
-                  <select
-                    value={selectedShareCustomerId}
-                    onChange={(e) => handleShareCustomerSelect(e.target.value)}
-                    className="w-full text-[11px] font-medium bg-white border border-[#e2e8f0] rounded-lg px-2 py-1 text-[#0f172a] focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  >
-                    <option value="">-- Choose saved customer to auto-fill --</option>
-                    {customers.map((c) => (
-                      <option key={c._id} value={c._id}>
-                        {c.name} {c.mobile_number ? `(${c.mobile_number})` : "(No number)"}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              {/* Auto-detected client badge */}
+              <div className="flex items-center justify-between text-[11px] text-[#64748b] bg-[#f8fafc] border border-[#e2e8f0] rounded-lg px-2.5 py-1.5 mt-1">
+                <span className="flex items-center gap-1.5 font-medium truncate">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                  Invoice Client: <strong className="text-[#0f172a] font-semibold ml-0.5">{whatsappInvoice?.client || "Customer"}</strong>
+                </span>
+                {whatsappPhone ? (
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
+                    ✓ Auto-linked
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 shrink-0">
+                    No phone saved in bill
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Status-Based Message Template Selector */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b]">
+                  Select Message Template
+                </label>
+                <span className="text-[10px] font-semibold text-[#64748b]">
+                  Invoice Status: <strong className="text-[#0f172a] uppercase font-bold">{whatsappInvoice?.status || "General"}</strong>
+                </span>
+              </div>
+              <div className="grid grid-cols-4 gap-1.5 p-1 bg-[#f1f5f9] rounded-xl border border-[#e2e8f0]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedTemplate("ALL");
+                    if (whatsappInvoice) setWhatsappMessage(buildWhatsAppMessage(whatsappInvoice, "ALL"));
+                  }}
+                  className={`py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer text-center ${
+                    selectedTemplate === "ALL"
+                      ? "bg-white text-[#0f172a] shadow-xs border border-[#cbd5e1]"
+                      : "text-[#64748b] hover:text-[#0f172a]"
+                  }`}
+                >
+                  📄 ALL
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedTemplate("PAID");
+                    if (whatsappInvoice) setWhatsappMessage(buildWhatsAppMessage(whatsappInvoice, "PAID"));
+                  }}
+                  className={`py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer text-center ${
+                    selectedTemplate === "PAID"
+                      ? "bg-emerald-600 text-white shadow-xs"
+                      : "text-[#64748b] hover:text-emerald-700"
+                  }`}
+                >
+                  ✅ PAID
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedTemplate("PENDING");
+                    if (whatsappInvoice) setWhatsappMessage(buildWhatsAppMessage(whatsappInvoice, "PENDING"));
+                  }}
+                  className={`py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer text-center ${
+                    selectedTemplate === "PENDING"
+                      ? "bg-amber-600 text-white shadow-xs"
+                      : "text-[#64748b] hover:text-amber-700"
+                  }`}
+                >
+                  ⏳ PENDING
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedTemplate("OVERDUE");
+                    if (whatsappInvoice) setWhatsappMessage(buildWhatsAppMessage(whatsappInvoice, "OVERDUE"));
+                  }}
+                  className={`py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer text-center ${
+                    selectedTemplate === "OVERDUE"
+                      ? "bg-rose-600 text-white shadow-xs"
+                      : "text-[#64748b] hover:text-rose-700"
+                  }`}
+                >
+                  🚨 OVERDUE
+                </button>
+              </div>
             </div>
 
             {/* Short Message Preview */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b]">
-                  Short Message Preview
+                  Message Preview ({selectedTemplate})
                 </label>
                 <button
                   type="button"

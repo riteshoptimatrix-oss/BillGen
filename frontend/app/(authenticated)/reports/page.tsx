@@ -1,21 +1,24 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { getApiUrl } from "@/lib/api";
-
-type ReportTab =
-  | "sales-register"
-  | "purchase-register"
-  | "expenses-statement"
-  | "gst-summary"
-  | "stock-statement"
-  | "profit-loss"
-  | "labour-payroll";
+import ReportsListView, { ReportTab, REPORT_DEFINITIONS } from "@/components/reports/ReportsListView";
 
 type DateFilterType = "today" | "week" | "month" | "custom" | "all";
 
-export default function ReportsPage() {
-  const [activeTab, setActiveTab] = useState<ReportTab>("sales-register");
+function ReportsContent() {
+  const searchParams = useSearchParams();
+
+  // Initialize activeTab from query param if available, otherwise null (show List View)
+  const [activeTab, setActiveTab] = useState<ReportTab | null>(() => {
+    const tabParam = searchParams.get("tab") as ReportTab;
+    if (tabParam && REPORT_DEFINITIONS.some((r) => r.id === tabParam)) {
+      return tabParam;
+    }
+    return null;
+  });
 
   // Date Filter State
   const [dateFilter, setDateFilter] = useState<DateFilterType>("all");
@@ -39,68 +42,102 @@ export default function ReportsPage() {
   const [plData, setPlData] = useState<any>(null);
   const [payrollData, setPayrollData] = useState<any>(null);
 
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   const apiUrl = getApiUrl();
 
-  // Build query string for date-filtered reports
-  const getDateQuery = () => {
-    let q = `filter=${dateFilter}`;
-    if (dateFilter === "custom" && startDate && endDate) {
-      q += `&start_date=${startDate}&end_date=${endDate}`;
+  // Current active report metadata
+  const currentReportMeta = useMemo(() => {
+    if (!activeTab) return null;
+    return REPORT_DEFINITIONS.find((r) => r.id === activeTab) || null;
+  }, [activeTab]);
+
+  // Handle opening a report from list view
+  const handleOpenReport = (tab: ReportTab) => {
+    setActiveTab(tab);
+    if (typeof window !== "undefined") {
+      window.history.pushState(null, "", `?tab=${tab}`);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
-    return q;
   };
+
+  // Handle going back to list view
+  const handleBackToList = () => {
+    setActiveTab(null);
+    if (typeof window !== "undefined") {
+      window.history.pushState(null, "", window.location.pathname);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  // Synchronize browser native back/forward buttons
+  useEffect(() => {
+    const onPopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get("tab") as ReportTab | null;
+      if (tab && REPORT_DEFINITIONS.some((r) => r.id === tab)) {
+        setActiveTab(tab);
+      } else {
+        setActiveTab(null);
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   // Fetch report data based on active tab
-  const fetchCurrentReport = async () => {
-    setIsLoading(true);
-    try {
-      if (activeTab === "sales-register") {
-        const res = await fetch(`${apiUrl}/reports/sales-register?${getDateQuery()}`);
-        if (res.ok) setSalesData(await res.json());
-      } else if (activeTab === "purchase-register") {
-        const res = await fetch(`${apiUrl}/reports/purchase-register?${getDateQuery()}`);
-        if (res.ok) setPurchaseData(await res.json());
-      } else if (activeTab === "expenses-statement") {
-        const res = await fetch(`${apiUrl}/reports/expenses-statement?${getDateQuery()}`);
-        if (res.ok) setExpensesData(await res.json());
-      } else if (activeTab === "gst-summary") {
-        const res = await fetch(`${apiUrl}/reports/gst-summary?${getDateQuery()}`);
-        if (res.ok) setGstData(await res.json());
-      } else if (activeTab === "stock-statement") {
-        const res = await fetch(`${apiUrl}/reports/stock-statement`);
-        if (res.ok) setStockData(await res.json());
-      } else if (activeTab === "profit-loss") {
-        const res = await fetch(`${apiUrl}/reports/profit-loss?${getDateQuery()}`);
-        if (res.ok) setPlData(await res.json());
-      } else if (activeTab === "labour-payroll") {
-        const res = await fetch(
-          `${apiUrl}/reports/labour-payroll?month=${payrollMonth}&year=${payrollYear}`
-        );
-        if (res.ok) setPayrollData(await res.json());
-      }
-    } catch (err) {
-      console.error(`Failed to load ${activeTab} report`, err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchCurrentReport();
-  }, [activeTab, dateFilter, startDate, endDate, payrollMonth, payrollYear]);
+    if (!activeTab) return;
+    let ignore = false;
 
-  // Tab Definitions
-  const tabs = [
-    { id: "sales-register" as ReportTab, label: "1. Sales Register", icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
-    { id: "purchase-register" as ReportTab, label: "2. Purchase Register", icon: "M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" },
-    { id: "expenses-statement" as ReportTab, label: "3. Expenses Statement", icon: "M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" },
-    { id: "gst-summary" as ReportTab, label: "4. GST Summary", icon: "M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" },
-    { id: "stock-statement" as ReportTab, label: "5. Stock Statement", icon: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" },
-    { id: "profit-loss" as ReportTab, label: "6. Profit & Loss", icon: "M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" },
-    { id: "labour-payroll" as ReportTab, label: "7. Labour Payroll", icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" },
-  ];
+    const getDateQuery = () => {
+      let q = `filter=${dateFilter}`;
+      if (dateFilter === "custom" && startDate && endDate) {
+        q += `&start_date=${startDate}&end_date=${endDate}`;
+      }
+      return q;
+    };
+
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        if (activeTab === "sales-register") {
+          const res = await fetch(`${apiUrl}/reports/sales-register?${getDateQuery()}`);
+          if (res.ok && !ignore) setSalesData(await res.json());
+        } else if (activeTab === "purchase-register") {
+          const res = await fetch(`${apiUrl}/reports/purchase-register?${getDateQuery()}`);
+          if (res.ok && !ignore) setPurchaseData(await res.json());
+        } else if (activeTab === "expenses-statement") {
+          const res = await fetch(`${apiUrl}/reports/expenses-statement?${getDateQuery()}`);
+          if (res.ok && !ignore) setExpensesData(await res.json());
+        } else if (activeTab === "gst-summary") {
+          const res = await fetch(`${apiUrl}/reports/gst-summary?${getDateQuery()}`);
+          if (res.ok && !ignore) setGstData(await res.json());
+        } else if (activeTab === "stock-statement") {
+          const res = await fetch(`${apiUrl}/reports/stock-statement`);
+          if (res.ok && !ignore) setStockData(await res.json());
+        } else if (activeTab === "profit-loss") {
+          const res = await fetch(`${apiUrl}/reports/profit-loss?${getDateQuery()}`);
+          if (res.ok && !ignore) setPlData(await res.json());
+        } else if (activeTab === "labour-payroll") {
+          const res = await fetch(
+            `${apiUrl}/reports/labour-payroll?month=${payrollMonth}&year=${payrollYear}`
+          );
+          if (res.ok && !ignore) setPayrollData(await res.json());
+        }
+      } catch (err) {
+        console.error(`Failed to load ${activeTab} report`, err);
+      } finally {
+        if (!ignore) setIsLoading(false);
+      }
+    };
+
+    loadData();
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeTab, dateFilter, startDate, endDate, payrollMonth, payrollYear, apiUrl]);
 
   const months = [
     "January", "February", "March", "April", "May", "June",
@@ -113,9 +150,24 @@ export default function ReportsPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 border-b border-[#e2e8f0] pb-4 sm:pb-5">
         <div className="w-full sm:w-auto">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {activeTab && (
+              <button
+                type="button"
+                onClick={handleBackToList}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-all shadow-xs active:scale-95 mr-1"
+                title="Return to Reports Directory"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                <span>Back to List</span>
+              </button>
+            )}
+
             <h1 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight leading-snug">
-              Business &amp; Financial Reports
+              {activeTab ? currentReportMeta?.label : "Business & Financial Reports"}
             </h1>
+
             <span className="bg-stone-100 text-stone-700 text-[11px] sm:text-xs font-bold px-2.5 sm:px-3 py-1 rounded-full border border-[#e2e8f0] flex items-center gap-1.5 flex-shrink-0">
               <svg className="w-3.5 h-3.5 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -125,12 +177,42 @@ export default function ReportsPage() {
             </span>
           </div>
           <p className="text-xs sm:text-sm text-gray-500 mt-1 max-w-2xl leading-relaxed">
-            Centralized read-only reporting. Real-time data compiled automatically from Sales, Purchases, Expenses, Products, and Payroll.
+            {activeTab
+              ? currentReportMeta?.description
+              : "Centralized read-only reporting. Real-time data compiled automatically from Sales, Purchases, Expenses, Products, and Payroll."}
           </p>
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          {activeTab && (
+            <div className="flex items-center gap-2">
+              <label htmlFor="quick-switch-header" className="sr-only">Switch Report</label>
+              <select
+                id="quick-switch-header"
+                value={activeTab}
+                onChange={(e) => handleOpenReport(e.target.value as ReportTab)}
+                aria-label="Switch between reports"
+                className="px-3 py-2 text-xs font-bold text-gray-700 bg-white border border-[#e2e8f0] rounded-xl hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-[#0260de] shadow-xs cursor-pointer"
+              >
+                {REPORT_DEFINITIONS.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                onClick={handleBackToList}
+                className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 transition-colors shadow-xs active:scale-95"
+              >
+                <span>List View</span>
+              </button>
+            </div>
+          )}
+
           <button
+            type="button"
             onClick={() => window.print()}
             className="flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 text-xs font-bold text-gray-700 bg-white border border-[#e2e8f0] rounded-xl hover:bg-gray-50 transition-colors shadow-xs active:scale-95 w-full sm:w-auto"
           >
@@ -142,118 +224,103 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* Navigation Tabs Bar */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-[#e2e8f0] -mx-3.5 px-3.5 sm:mx-0 sm:px-0 scroll-smooth">
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 text-xs font-bold rounded-xl whitespace-nowrap transition-all flex-shrink-0 ${
-                isActive
-                  ? "bg-[#0260de] text-white shadow-sm shadow-blue-500/10"
-                  : "bg-white text-gray-600 border border-[#e2e8f0] hover:bg-gray-50 hover:text-gray-900"
-              }`}
-            >
-              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={tab.icon} />
-              </svg>
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </div>
+      {/* VIEW MODE 1: REPORTS DIRECTORY LIST VIEW */}
+      {!activeTab && (
+        <ReportsListView onSelectReport={handleOpenReport} />
+      )}
 
-      {/* Date Filter Bar (Shown for tabs that support date ranges) */}
-      {activeTab !== "stock-statement" && activeTab !== "labour-payroll" && (
-        <div className="bg-white p-3 sm:p-4 rounded-2xl border border-[#e2e8f0] shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4 w-full">
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full md:w-auto">
-            <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider mr-1">
-              Date Period:
-            </span>
-            {(["today", "week", "month", "all", "custom"] as DateFilterType[]).map((df) => (
-              <button
-                key={df}
-                onClick={() => setDateFilter(df)}
-                className={`px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${
-                  dateFilter === df
-                    ? "bg-gray-900 text-white shadow-xs"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
-              >
-                {df === "today" ? "Today" : df === "week" ? "This Week" : df === "month" ? "This Month" : df === "all" ? "All Time" : "Custom Range"}
-              </button>
-            ))}
-          </div>
-
-          {dateFilter === "custom" && (
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 text-xs w-full md:w-auto pt-2 md:pt-0 border-t md:border-t-0 border-[#e2e8f0]">
-              <div className="flex items-center gap-1.5">
-                <span className="text-gray-500 font-medium">From:</span>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full sm:w-auto px-2.5 py-1.5 bg-gray-50 border border-[#e2e8f0] rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-gray-900"
-                />
+      {/* VIEW MODE 2: OPENED REPORT VIEW */}
+      {activeTab && (
+        <>
+          {/* Date Filter Bar (Shown for tabs that support date ranges) */}
+          {activeTab !== "stock-statement" && activeTab !== "labour-payroll" && (
+            <div className="bg-white p-3 sm:p-4 rounded-2xl border border-[#e2e8f0] shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4 w-full">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full md:w-auto">
+                <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider mr-1">
+                  Date Period:
+                </span>
+                {(["today", "week", "month", "all", "custom"] as DateFilterType[]).map((df) => (
+                  <button
+                    key={df}
+                    onClick={() => setDateFilter(df)}
+                    className={`px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${
+                      dateFilter === df
+                        ? "bg-gray-900 text-white shadow-xs"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    }`}
+                  >
+                    {df === "today" ? "Today" : df === "week" ? "This Week" : df === "month" ? "This Month" : df === "all" ? "All Time" : "Custom Range"}
+                  </button>
+                ))}
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-gray-500 font-medium">To:</span>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full sm:w-auto px-2.5 py-1.5 bg-gray-50 border border-[#e2e8f0] rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-gray-900"
-                />
+
+              {dateFilter === "custom" && (
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 text-xs w-full md:w-auto pt-2 md:pt-0 border-t md:border-t-0 border-[#e2e8f0]">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-gray-500 font-medium">From:</span>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="w-full sm:w-auto px-2.5 py-1.5 bg-gray-50 border border-[#e2e8f0] rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-gray-900"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-gray-500 font-medium">To:</span>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="w-full sm:w-auto px-2.5 py-1.5 bg-gray-50 border border-[#e2e8f0] rounded-lg text-xs font-medium focus:outline-none focus:ring-1 focus:ring-gray-900"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Month & Year Filter for Labour Payroll */}
+          {activeTab === "labour-payroll" && (
+            <div className="bg-white p-3 sm:p-4 rounded-2xl border border-[#e2e8f0] shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 w-full">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Select Payroll Month:</span>
+                <select
+                  value={payrollMonth}
+                  onChange={(e) => setPayrollMonth(Number(e.target.value))}
+                  aria-label="Payroll Month"
+                  className="px-3 py-1.5 bg-gray-50 border border-[#e2e8f0] rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-gray-900"
+                >
+                  {months.map((m, idx) => (
+                    <option key={m} value={idx + 1}>{m}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={payrollYear}
+                  onChange={(e) => setPayrollYear(Number(e.target.value))}
+                  aria-label="Payroll Year"
+                  className="px-3 py-1.5 bg-gray-50 border border-[#e2e8f0] rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-gray-900"
+                >
+                  {[2025, 2026, 2027].map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="text-xs text-gray-500 font-medium">
+                Active Payroll Period: <strong className="text-gray-900">{months[payrollMonth - 1]} {payrollYear}</strong>
               </div>
             </div>
           )}
-        </div>
-      )}
 
-      {/* Month & Year Filter for Labour Payroll */}
-      {activeTab === "labour-payroll" && (
-        <div className="bg-white p-3 sm:p-4 rounded-2xl border border-[#e2e8f0] shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 w-full">
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Select Payroll Month:</span>
-            <select
-              value={payrollMonth}
-              onChange={(e) => setPayrollMonth(Number(e.target.value))}
-              aria-label="Payroll Month"
-              className="px-3 py-1.5 bg-gray-50 border border-[#e2e8f0] rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-gray-900"
-            >
-              {months.map((m, idx) => (
-                <option key={m} value={idx + 1}>{m}</option>
-              ))}
-            </select>
-
-            <select
-              value={payrollYear}
-              onChange={(e) => setPayrollYear(Number(e.target.value))}
-              aria-label="Payroll Year"
-              className="px-3 py-1.5 bg-gray-50 border border-[#e2e8f0] rounded-xl text-xs font-bold text-gray-800 focus:outline-none focus:ring-1 focus:ring-gray-900"
-            >
-              {[2025, 2026, 2027].map((y) => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="text-xs text-gray-500 font-medium">
-            Active Payroll Period: <strong className="text-gray-900">{months[payrollMonth - 1]} {payrollYear}</strong>
-          </div>
-        </div>
-      )}
-
-      {/* Loading Indicator */}
-      {isLoading ? (
-        <div className="bg-white rounded-2xl border border-[#e2e8f0] p-10 sm:p-16 text-center shadow-xs w-full flex flex-col items-center justify-center">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#0260de]"></div>
-          <p className="text-xs text-gray-400 mt-2 font-medium">Compiling dynamic report data...</p>
-        </div>
-      ) : (
-        <>
+          {/* Loading Indicator */}
+          {isLoading ? (
+            <div className="bg-white rounded-2xl border border-[#e2e8f0] p-10 sm:p-16 text-center shadow-xs w-full flex flex-col items-center justify-center">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#0260de]"></div>
+              <p className="text-xs text-gray-400 mt-2 font-medium">Compiling dynamic report data...</p>
+            </div>
+          ) : (
+            <>
           {/* ========================================================= */}
           {/* 1. SALES REGISTER REPORT */}
           {/* ========================================================= */}
@@ -1052,8 +1119,47 @@ export default function ReportsPage() {
               </div>
             </div>
           )}
+
+          {/* Bottom Back Button & Back to Top */}
+          <div className="pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={handleBackToList}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl transition-all shadow-xs active:scale-95"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              <span>Back to Reports List</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors"
+            >
+              <span>Back to Top ↑</span>
+            </button>
+          </div>
         </>
       )}
-    </div>
+    </>
+  )}
+</div>
+  );
+}
+
+export default function ReportsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-16 text-center flex flex-col items-center justify-center">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#0260de]"></div>
+          <p className="text-xs text-gray-400 mt-2 font-medium">Loading reports directory...</p>
+        </div>
+      }
+    >
+      <ReportsContent />
+    </Suspense>
   );
 }

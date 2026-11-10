@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { getApiUrl, formatImageUrl } from "@/lib/api";
 import { exportElementToPDF } from "@/lib/pdf";
+import InvoicePrintDocument from "@/components/invoice/InvoicePrintDocument";
 
 interface InvoiceItem {
   product_id?: string;
@@ -70,14 +71,17 @@ export default function CreateInvoicePage() {
   const [clientName, setClientName] = useState("");
   const [companyClientName, setCompanyClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
   const [clientAddress, setClientAddress] = useState("");
   const [clientGst, setClientGst] = useState("");
 
   // 3. Invoice Meta
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [paymentTerms, setPaymentTerms] = useState("15 Days");
-  const [customTermsDays, setCustomTermsDays] = useState<number>(15);
+  const [paymentTerms, setPaymentTerms] = useState("Immediate");
+  const [paymentMethod, setPaymentMethod] = useState("UPI");
+  const [status, setStatus] = useState("Paid");
+  const [customTermsDays, setCustomTermsDays] = useState<number>(0);
   const [dueDate, setDueDate] = useState("");
   const [taxRate, setTaxRate] = useState<number>(18);
   const [discountAmount, setDiscountAmount] = useState<number>(0);
@@ -94,9 +98,12 @@ export default function CreateInvoicePage() {
   const productDropdownRef = useRef<HTMLDivElement>(null);
 
   // 5. Payment Info
-  const [bankName, setBankName] = useState("Bank of Baroda");
-  const [accountNumber, setAccountNumber] = useState("01420200001234");
-  const [refIfsc, setRefIfsc] = useState("BARB0ODHAVA");
+  const [bankName, setBankName] = useState("State Bank of India");
+  const [accountNumber, setAccountNumber] = useState("39482019482");
+  const [refIfsc, setRefIfsc] = useState("SBIN0001042");
+  const [branchName, setBranchName] = useState("Odhav Industrial Branch, Ahmedabad");
+  const [accountHolder, setAccountHolder] = useState("SiddhiVinayak Enterprise (Current Account)");
+  const [accountType, setAccountType] = useState("Current Account");
 
   // 6. Terms and Conditions
   const [termsText, setTermsText] = useState(
@@ -111,6 +118,38 @@ export default function CreateInvoicePage() {
   useEffect(() => {
     if (typeof window !== "undefined" && window.innerWidth < 768) {
       setPreviewScale(0.44);
+    }
+  }, []);
+
+  // Load defaults from System Settings (Company, Bank, Invoice & Tax rules)
+  useEffect(() => {
+    try {
+      const savedBank = localStorage.getItem("sve_bank_settings");
+      if (savedBank) {
+        const b = JSON.parse(savedBank);
+        if (b.bankName) setBankName(b.bankName);
+        if (b.accountNumber) setAccountNumber(b.accountNumber);
+        if (b.ifscCode) setRefIfsc(b.ifscCode);
+        if (b.branchName) setBranchName(b.branchName);
+        if (b.accountHolder) setAccountHolder(b.accountHolder);
+        if (b.accountType) setAccountType(b.accountType);
+      }
+
+      const savedInv = localStorage.getItem("sve_invoice_defaults");
+      if (savedInv) {
+        const inv = JSON.parse(savedInv);
+        if (inv.defaultTerms) setPaymentTerms(inv.defaultTerms);
+        if (inv.defaultPaymentMethod) setPaymentMethod(inv.defaultPaymentMethod);
+        if (inv.notes) setTermsText(inv.notes);
+      }
+
+      const savedTax = localStorage.getItem("sve_tax_settings");
+      if (savedTax) {
+        const t = JSON.parse(savedTax);
+        if (t.defaultTaxRate !== undefined) setTaxRate(t.defaultTaxRate);
+      }
+    } catch (e) {
+      console.error("Failed to load user settings into bill-invoice create", e);
     }
   }, []);
 
@@ -198,12 +237,16 @@ export default function CreateInvoicePage() {
       setClientName(c.name);
       setCompanyClientName(c.name);
       setClientPhone(c.mobile_number || "");
+      setClientEmail(c.email || "");
       setClientAddress(c.billing_address || c.delivery_address || "");
       setClientGst(c.gst_number || "");
 
       if (c.bank_name) setBankName(c.bank_name);
       if (c.account_number) setAccountNumber(c.account_number);
       if (c.ifsc_code) setRefIfsc(c.ifsc_code);
+      if (c.branch_name) setBranchName(c.branch_name);
+      if (c.account_holder_name) setAccountHolder(c.account_holder_name);
+      if (c.account_type) setAccountType(c.account_type);
     }
   };
 
@@ -322,14 +365,22 @@ export default function CreateInvoicePage() {
     const tax = Math.round(((taxable * (Number(taxRate) || 0)) / 100) * 100) / 100;
     const grandTotal = Math.round((taxable + tax) * 100) / 100;
 
+    const isInterState = clientGst && !clientGst.startsWith("24");
+    const igst = isInterState ? tax : 0;
+    const cgst = !isInterState ? Math.round((tax / 2) * 100) / 100 : 0;
+    const sgst = !isInterState ? Math.round((tax / 2) * 100) / 100 : 0;
+
     return {
       subtotal,
       discount,
       taxable,
       tax,
+      cgst,
+      sgst,
+      igst,
       grandTotal
     };
-  }, [items, discountAmount, taxRate]);
+  }, [items, discountAmount, taxRate, clientGst]);
 
   // Format Date to DD/MM/YYYY
   const formattedInvoiceDate = useMemo(() => {
@@ -403,17 +454,20 @@ export default function CreateInvoicePage() {
         discount_amount: calculations.discount,
         tax_percent: taxRate,
         taxable_amount: calculations.taxable,
-        cgst_amount: Math.round((calculations.tax / 2) * 100) / 100,
-        sgst_amount: Math.round((calculations.tax / 2) * 100) / 100,
-        igst_amount: 0.0,
+        cgst_amount: calculations.cgst,
+        sgst_amount: calculations.sgst,
+        igst_amount: calculations.igst,
         amount: calculations.grandTotal,
-        amount_paid: calculations.grandTotal,
-        balance_due: 0.0,
-        status: "Paid",
+        amount_paid: status === "Paid" ? calculations.grandTotal : 0,
+        balance_due: status === "Paid" ? 0 : calculations.grandTotal,
+        status: status,
 
         bank_name: bankName.trim() || undefined,
         account_number: accountNumber.trim() || undefined,
         ifsc_code: refIfsc.trim() || undefined,
+        branch_name: branchName.trim() || undefined,
+        account_holder_name: accountHolder.trim() || undefined,
+        account_type: accountType.trim() || undefined,
 
         notes: termsText
       };
@@ -1263,351 +1317,72 @@ export default function CreateInvoicePage() {
               maxHeight: "calc(100vh - 140px)"
             }}
           >
-            {/* THE ACTUAL A4 INVOICE DOCUMENT (210mm × 297mm) */}
+            {/* THE ACTUAL A4 INVOICE DOCUMENT (210mm × 297mm - MATCHING REFERENCE DESIGN) */}
             <div
-              id="printable-a4-invoice"
-              className="bg-white shadow-2xl print:shadow-none flex flex-col justify-between relative transition-transform origin-top"
+              className="origin-top transition-transform shadow-2xl print:shadow-none bg-white rounded-none"
               style={{
-                width: "210mm",
-                minHeight: "297mm",
-                height: "297mm",
+                width: "794px",
+                height: "1123px",
                 transform: `scale(${previewScale})`,
-                marginBottom: `${-(297 * 3.7795275591 * (1 - previewScale))}px`,
+                marginBottom: `${-(1123 * (1 - previewScale))}px`,
                 boxSizing: "border-box"
               }}
             >
-              {/* TOP HEADER: DUAL-TONE ANGLED POLYGON BANNER */}
-              <div className="relative w-full h-[124px] overflow-hidden flex-shrink-0 bg-[#1e293b]">
-                {/* Left Part: Vibrant Lime Green Polygon ("Bill Book") */}
-                <div
-                  className="absolute inset-0 bg-[#76c816] flex flex-col justify-center pl-12 shadow-sm"
-                  style={{
-                    clipPath: "polygon(0 0, 48% 0, 40% 100%, 0 100%)"
-                  }}
-                >
-                  <span className="text-[10px] font-black tracking-widest text-[#1e293b]/70 uppercase">
-                    Tax Invoice / Bill
-                  </span>
-                  <h1 className="text-4xl font-black text-gray-950 tracking-tight select-none">
-                    Bill Book
-                  </h1>
-                </div>
+              <InvoicePrintDocument
+                id="printable-a4-invoice"
+                data={{
+                  invoice_number: invoiceNumber,
+                  date: invoiceDate,
+                  due_date: dueDate,
+                  payment_terms: paymentTerms,
+                  payment_method: paymentMethod,
+                  status: status,
 
-                {/* Right Part: Dark Charcoal / Slate Polygon (Company Name & Tagline) */}
-                <div
-                  className="absolute inset-0 bg-[#1e293b] flex items-center justify-end pr-10"
-                  style={{
-                    clipPath: "polygon(48% 0, 100% 0, 100% 100%, 40% 100%)"
-                  }}
-                >
-                  <div className="flex items-center gap-3.5">
-                    {/* Circle Logo Crest with Initial */}
-                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#76c816] to-[#5ea111] text-gray-950 flex items-center justify-center font-black text-lg shadow-md flex-shrink-0 border border-white/20">
-                      <span>SV</span>
-                    </div>
+                  client: companyClientName || clientName || "Valued Customer",
+                  customer_phone: clientPhone,
+                  customer_email: clientEmail,
+                  customer_gst: clientGst,
+                  customer_address: clientAddress,
 
-                    <div className="text-right">
-                      <h2 className="text-xl font-black text-white tracking-tight">
-                        {companyName}
-                      </h2>
-                      <p className="text-[11px] text-[#76c816] font-semibold tracking-wide">
-                        {companyTagline}
-                      </p>
-                      <p className="text-[10px] text-slate-400 font-mono font-medium mt-0.5">
-                        GSTIN: {companyGstin}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                  items: items.map((it) => ({
+                    product_id: it.product_id,
+                    item_no: it.item_no,
+                    product_name: it.product_name,
+                    description: it.description,
+                    quantity: it.quantity,
+                    unit_price: it.unit_price,
+                    total: it.total,
+                    image: it.image
+                  })),
 
-              {/* BODY CONTENT AREA */}
-              <div className="flex-1 px-10 pt-5 pb-2 flex flex-col justify-between">
-                <div>
-                  {/* "Billed to" & Invoice Meta Grid */}
-                  <div className="grid grid-cols-12 gap-3 mb-4 pb-3 border-b border-[#e2e8f0]">
-                    {/* Left: Customer Info */}
-                    <div className="col-span-7 bg-slate-50/70 p-3 rounded-xl border border-slate-200/80">
-                      <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-slate-200">
-                        <span className="text-[10px] font-black text-[#1e293b] uppercase tracking-wider flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-[#76c816]"></span>
-                          Billed to (Buyer Details)
-                        </span>
-                        {clientGst && (
-                          <span className="text-[9px] font-mono font-bold text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">
-                            GST: {clientGst}
-                          </span>
-                        )}
-                      </div>
+                  subtotal: calculations.subtotal,
+                  discount_amount: discountAmount,
+                  tax_percent: taxRate,
+                  cgst_amount: calculations.cgst,
+                  sgst_amount: calculations.sgst,
+                  igst_amount: calculations.igst,
+                  amount: calculations.grandTotal,
+                  amount_paid: status === "Paid" ? calculations.grandTotal : 0,
+                  balance_due: status === "Paid" ? 0 : calculations.grandTotal,
 
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div>
-                          <p className="text-[9px] font-bold text-slate-400 uppercase">Contact Person</p>
-                          <p className="font-extrabold text-slate-900 text-xs mt-0.5">{clientName || "—"}</p>
-                          <p className="text-slate-600 text-[11px] font-semibold mt-0.5 truncate">{companyClientName || ""}</p>
-                        </div>
-                        <div>
-                          <p className="text-[9px] font-bold text-slate-400 uppercase">Phone &amp; Address</p>
-                          <p className="font-bold text-slate-900 text-xs mt-0.5 font-mono">{clientPhone || "—"}</p>
-                          <p className="text-slate-600 text-[10px] mt-0.5 leading-snug line-clamp-2">{clientAddress || "—"}</p>
-                        </div>
-                      </div>
-                    </div>
+                  bank_name: bankName,
+                  account_number: accountNumber,
+                  ifsc_code: refIfsc,
+                  branch_name: branchName,
+                  account_holder_name: accountHolder,
+                  account_type: accountType,
 
-                    {/* Right: Invoice Particulars */}
-                    <div className="col-span-5 bg-slate-50/70 p-3 rounded-xl border border-slate-200/80 flex flex-col justify-between text-xs">
-                      <div className="flex items-center justify-between pb-1 border-b border-slate-200">
-                        <span className="text-[10px] font-black text-[#1e293b] uppercase tracking-wider">
-                          Invoice Particulars
-                        </span>
-                        <span className="font-mono font-black text-xs px-2 py-0.5 rounded-lg bg-[#1e293b] text-white">
-                          {invoiceNumber || "—"}
-                        </span>
-                      </div>
+                  company_name: companyName,
+                  company_tagline: companyTagline,
+                  company_address: companyAddress,
+                  company_gstin: companyGstin,
+                  company_phone: companyPhone,
+                  company_email: companyEmail,
+                  company_website: companyWebsite,
 
-                      <div className="grid grid-cols-2 gap-2 mt-1.5">
-                        <div>
-                          <p className="text-[9px] font-bold text-slate-400 uppercase">Invoice Date</p>
-                          <p className="font-bold text-slate-900 text-xs font-mono mt-0.5">{formattedInvoiceDate}</p>
-                        </div>
-                        <div>
-                          <p className="text-[9px] font-bold text-slate-400 uppercase">Payment Terms</p>
-                          <p className="font-bold text-slate-900 text-xs mt-0.5">{paymentTerms}</p>
-                        </div>
-                        <div>
-                          <p className="text-[9px] font-bold text-slate-400 uppercase">Due Date</p>
-                          <p className="font-bold text-red-600 text-xs font-mono mt-0.5">{formattedDueDate || "—"}</p>
-                        </div>
-                        <div>
-                          <p className="text-[9px] font-bold text-slate-400 uppercase">Mode</p>
-                          <p className="font-bold text-slate-900 text-xs mt-0.5">Bank Transfer / UPI</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ITEMIZED TABLE: EXACT REQUESTED COLUMNS & BEAUTIFUL UI/UX */}
-                  {/* Columns: Sr. No, Product (image + product name top + description below), Price, Qty, Total */}
-                  <div className="border border-slate-900 rounded-xl overflow-hidden shadow-xs">
-                    <table className="w-full text-left text-xs border-collapse">
-                      {/* Dark Charcoal Header */}
-                      <thead>
-                        <tr className="bg-[#1e293b] text-white text-[11px] font-black uppercase tracking-wider">
-                          <th className="py-2.5 px-3 border-r border-slate-700 text-center w-14">
-                            Sr. No
-                          </th>
-                          <th className="py-2.5 px-4 border-r border-slate-700 text-left">
-                            Product
-                          </th>
-                          <th className="py-2.5 px-4 border-r border-slate-700 text-right w-28">
-                            Price
-                          </th>
-                          <th className="py-2.5 px-3 border-r border-slate-700 text-center w-16">
-                            Qty
-                          </th>
-                          <th className="py-2.5 px-4 text-right w-28">
-                            Total
-                          </th>
-                        </tr>
-                      </thead>
-
-                      <tbody className="divide-y divide-gray-300 text-gray-800 bg-white">
-                        {/* Dynamic User Entered Items */}
-                        {items.length === 0 ? (
-                          <tr>
-                            <td colSpan={5} className="py-8 text-center text-xs text-gray-400 italic">
-                              No items added to invoice yet.
-                            </td>
-                          </tr>
-                        ) : items.map((it, idx) => (
-                          <tr key={idx} className="min-h-[54px] hover:bg-slate-50/30">
-                            {/* Sr. No */}
-                            <td className="py-2 px-3 border-r border-gray-300 text-center font-bold text-slate-700 font-mono text-xs align-top">
-                              {it.item_no || String(idx + 1).padStart(2, "0")}
-                            </td>
-
-                            {/* Product: Left Image + Top Product Name + Bottom Description */}
-                            <td className="py-2 px-4 border-r border-gray-300 align-top">
-                              <div className="flex items-start gap-3">
-                                {it.image ? (
-                                  <div className="w-10 h-10 rounded-lg border border-[#e2e8f0] bg-white overflow-hidden flex-shrink-0 shadow-xs flex items-center justify-center">
-                                    <img
-                                      src={formatImageUrl(it.image)}
-                                      alt={it.product_name}
-                                      crossOrigin="anonymous"
-                                      className="w-full h-full object-cover"
-                                      onError={(e) => {
-                                        const p = (e.target as HTMLElement).parentElement;
-                                        if (p) p.innerHTML = '<span class="text-xs">📦</span>';
-                                      }}
-                                    />
-                                  </div>
-                                ) : (
-                                  <div className="w-10 h-10 rounded-lg border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center flex-shrink-0 text-sm">
-                                    📦
-                                  </div>
-                                )}
-
-                                <div className="flex-1 min-w-0">
-                                  <h4 className="font-extrabold text-slate-900 text-xs leading-tight">
-                                    {it.product_name || it.description}
-                                  </h4>
-                                  {it.description && (
-                                    <p className="text-[10px] text-slate-500 mt-0.5 leading-snug line-clamp-2">
-                                      {it.description}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-
-                            {/* Price */}
-                            <td className="py-2 px-4 border-r border-gray-300 text-right font-semibold font-mono text-slate-800 text-xs align-top">
-                              ₹{it.unit_price.toLocaleString("en-IN")}
-                            </td>
-
-                            {/* Qty */}
-                            <td className="py-2 px-3 border-r border-gray-300 text-center font-black text-slate-900 text-xs align-top">
-                              {it.quantity}
-                            </td>
-
-                            {/* Total */}
-                            <td className="py-2 px-4 text-right font-black font-mono text-slate-950 text-xs align-top">
-                              ₹{it.total.toLocaleString("en-IN")}
-                            </td>
-                          </tr>
-                        ))}
-
-                        {/* Filler Empty Rows to maintain proper A4 vertical proportions */}
-                        {Array.from({ length: emptyRowsCount }).map((_, fIdx) => (
-                          <tr key={`filler-${fIdx}`} className="h-10">
-                            <td className="py-1 px-3 border-r border-gray-300 text-center text-transparent font-mono text-xs">
-                              {items.length + fIdx + 1}
-                            </td>
-                            <td className="py-1 px-4 border-r border-gray-300">&nbsp;</td>
-                            <td className="py-1 px-4 border-r border-gray-300">&nbsp;</td>
-                            <td className="py-1 px-3 border-r border-gray-300">&nbsp;</td>
-                            <td className="py-1 px-4">&nbsp;</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* BOTTOM BLOCK: PAYMENT INFO, TERMS, AND TOTALS */}
-                <div className="border border-slate-900 rounded-xl overflow-hidden grid grid-cols-12 divide-x divide-slate-900 mt-3 text-xs bg-white">
-                  {/* Left Column: Payment Info */}
-                  <div className="col-span-4 p-3.5 space-y-1.5 text-[11px] text-slate-700 bg-slate-50/40">
-                    <p className="font-black text-slate-900 text-xs mb-1 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#76c816]"></span>
-                      Payment info
-                    </p>
-                    <p className="text-slate-600">
-                      Bank Name: <strong className="text-slate-900 font-semibold">{bankName}</strong>
-                    </p>
-                    <p className="text-slate-600 font-mono">
-                      Account no.: <strong className="text-slate-900 font-semibold">{accountNumber}</strong>
-                    </p>
-                    <p className="text-slate-600 font-mono">
-                      Ref / IFSC: <strong className="text-slate-900 font-semibold">{refIfsc}</strong>
-                    </p>
-                  </div>
-
-                  {/* Middle Column: Terms and Conditions & Authorized Signatory */}
-                  <div className="col-span-5 p-3.5 flex flex-col justify-between text-[10px] text-slate-600 leading-snug">
-                    <div>
-                      <p className="font-black text-slate-900 text-xs mb-1">Terms and Conditions</p>
-                      <div className="whitespace-pre-line text-[10px] text-slate-500">
-                        {termsText}
-                      </div>
-                    </div>
-
-                    <div className="pt-2 mt-2 border-t border-slate-200 flex justify-between items-end">
-                      <span className="text-[9px] text-slate-400 font-mono">Computer Generated Invoice</span>
-                      <div className="text-right">
-                        <div className="w-28 border-b border-slate-400 mb-0.5"></div>
-                        <span className="text-[10px] font-bold text-slate-800">Authorized Signatory</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Column: Calculations & Totals (3 Stacked Rows with Green Highlight) */}
-                  <div className="col-span-3 flex flex-col justify-end divide-y divide-slate-900">
-                    {/* Subtotal Row */}
-                    <div className="flex h-8 items-stretch">
-                      <div className="w-1/2 bg-[#1e293b] text-white font-bold px-2.5 flex items-center text-[11px]">
-                        Subtotal
-                      </div>
-                      <div className="w-1/2 px-2.5 font-bold font-mono text-slate-900 flex items-center justify-end text-[11px]">
-                        ₹{calculations.subtotal.toLocaleString("en-IN")}
-                      </div>
-                    </div>
-
-                    {/* Tax Row */}
-                    <div className="flex h-8 items-stretch">
-                      <div className="w-1/2 bg-[#1e293b] text-white font-bold px-2.5 flex items-center text-[11px]">
-                        Tax ({taxRate}%)
-                      </div>
-                      <div className="w-1/2 px-2.5 font-bold font-mono text-slate-900 flex items-center justify-end text-[11px]">
-                        ₹{calculations.tax.toLocaleString("en-IN")}
-                      </div>
-                    </div>
-
-                    {/* Grand Total Row (Vibrant Lime Green Background) */}
-                    <div className="flex h-10 items-stretch bg-[#76c816]">
-                      <div className="w-1/2 text-gray-950 font-black px-2.5 flex items-center text-xs uppercase tracking-wide">
-                        Total
-                      </div>
-                      <div className="w-1/2 px-2.5 font-black font-mono text-gray-950 flex items-center justify-end text-sm">
-                        ₹{calculations.grandTotal.toLocaleString("en-IN")}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* BOTTOM FOOTER BANNER: DUAL-TONE ANGLED POLYGON WITH CONTACT INFO */}
-              <div className="relative w-full h-[76px] overflow-hidden flex-shrink-0 bg-[#1e293b]">
-                {/* Left Part: Dark Charcoal Bar with Contact Details */}
-                <div
-                  className="absolute inset-0 bg-[#1e293b] text-white flex items-center px-10 z-10"
-                  style={{
-                    clipPath: "polygon(0 0, 80% 0, 74% 100%, 0 100%)"
-                  }}
-                >
-                  <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-[11px]">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[#76c816]">📞</span>
-                      <span>{companyPhone}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[#76c816]">🌐</span>
-                      <span>{companyWebsite}</span>
-                    </div>
-                    <div className="flex items-center gap-2 truncate max-w-[260px]">
-                      <span className="text-[#76c816]">📍</span>
-                      <span className="truncate">{companyAddress}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[#76c816]">✉️</span>
-                      <span>{companyEmail}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right Part: Lime Green Corner Accent with Thank You Message */}
-                <div
-                  className="absolute inset-0 bg-[#76c816] flex items-center justify-end pr-6"
-                  style={{
-                    clipPath: "polygon(80% 0, 100% 0, 100% 100%, 74% 100%)"
-                  }}
-                >
-                  <p className="text-[#1e293b] font-black text-xs uppercase tracking-wider text-right">
-                    Thank You For<br />Your Business!
-                  </p>
-                </div>
-              </div>
+                  notes: termsText
+                }}
+              />
             </div>
           </div>
         </div>
