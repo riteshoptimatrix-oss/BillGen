@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { getApiUrl } from "@/lib/api";
+import { getApiUrl, getAuthToken } from "@/lib/api";
 import ReportsListView, { ReportTab, REPORT_DEFINITIONS } from "@/components/reports/ReportsListView";
 
 type DateFilterType = "today" | "week" | "month" | "custom" | "all";
@@ -101,27 +101,32 @@ function ReportsContent() {
     const loadData = async () => {
       setIsLoading(true);
       try {
+        const token = getAuthToken();
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+        const fetchOpts: RequestInit = { headers, credentials: "include" };
+
         if (activeTab === "sales-register") {
-          const res = await fetch(`${apiUrl}/reports/sales-register?${getDateQuery()}`);
+          const res = await fetch(`${apiUrl}/reports/sales-register?${getDateQuery()}`, fetchOpts);
           if (res.ok && !ignore) setSalesData(await res.json());
         } else if (activeTab === "purchase-register") {
-          const res = await fetch(`${apiUrl}/reports/purchase-register?${getDateQuery()}`);
+          const res = await fetch(`${apiUrl}/reports/purchase-register?${getDateQuery()}`, fetchOpts);
           if (res.ok && !ignore) setPurchaseData(await res.json());
         } else if (activeTab === "expenses-statement") {
-          const res = await fetch(`${apiUrl}/reports/expenses-statement?${getDateQuery()}`);
+          const res = await fetch(`${apiUrl}/reports/expenses-statement?${getDateQuery()}`, fetchOpts);
           if (res.ok && !ignore) setExpensesData(await res.json());
         } else if (activeTab === "gst-summary") {
-          const res = await fetch(`${apiUrl}/reports/gst-summary?${getDateQuery()}`);
+          const res = await fetch(`${apiUrl}/reports/gst-summary?${getDateQuery()}`, fetchOpts);
           if (res.ok && !ignore) setGstData(await res.json());
         } else if (activeTab === "stock-statement") {
-          const res = await fetch(`${apiUrl}/reports/stock-statement`);
+          const res = await fetch(`${apiUrl}/reports/stock-statement`, fetchOpts);
           if (res.ok && !ignore) setStockData(await res.json());
         } else if (activeTab === "profit-loss") {
-          const res = await fetch(`${apiUrl}/reports/profit-loss?${getDateQuery()}`);
+          const res = await fetch(`${apiUrl}/reports/profit-loss?${getDateQuery()}`, fetchOpts);
           if (res.ok && !ignore) setPlData(await res.json());
         } else if (activeTab === "labour-payroll") {
           const res = await fetch(
-            `${apiUrl}/reports/labour-payroll?month=${payrollMonth}&year=${payrollYear}`
+            `${apiUrl}/reports/labour-payroll?month=${payrollMonth}&year=${payrollYear}`,
+            fetchOpts
           );
           if (res.ok && !ignore) setPayrollData(await res.json());
         }

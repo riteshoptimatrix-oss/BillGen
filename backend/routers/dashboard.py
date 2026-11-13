@@ -61,18 +61,32 @@ async def get_dashboard_summary(
 
     # 2. Invoices & Revenue Calculations
     total_revenue = 0.0
+    total_sales = 0.0
+    today_sales = 0.0
+    month_sales = 0.0
     pending_bills = 0
+    pending_amount = 0.0
     now = datetime.now()
     current_year = now.year
     current_month_str = now.strftime("%Y-%m")
+    today_str = now.strftime("%Y-%m-%d")
 
     for inv in invoices:
         amt = float(inv.get("amount", 0.0))
         status = inv.get("status", "Pending")
+        inv_date = str(inv.get("date", ""))[:10]
+
+        total_sales += amt
+        if inv_date == today_str:
+            today_sales += amt
+        if inv_date[:7] == current_month_str:
+            month_sales += amt
+
         if status == "Paid":
             total_revenue += amt
         else:
             pending_bills += 1
+            pending_amount += amt
             if status == "Overdue":
                 system_alerts.append({
                     "id": f"inv-{inv['_id']}",
@@ -175,7 +189,11 @@ async def get_dashboard_summary(
     return {
         "kpis": {
             "totalRevenue": round(total_revenue, 2),
+            "totalSales": round(total_sales, 2),
+            "todaySales": round(today_sales, 2),
+            "monthSales": round(month_sales, 2),
             "pendingBills": pending_bills,
+            "pendingBillsAmount": round(pending_amount, 2),
             "totalProducts": products_count,
             "netProfit": round(net_profit, 2),
             "activeLabours": active_labours_count,

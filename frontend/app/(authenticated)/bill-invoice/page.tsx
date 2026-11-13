@@ -466,7 +466,9 @@ export default function BillInvoicePage() {
 
   const fetchInvoices = async () => {
     try {
-      const res = await fetch(`${apiUrl}/invoices/`);
+      const token = getAuthToken();
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${apiUrl}/invoices/`, { headers, credentials: "include" });
       if (res.ok) {
         setInvoices(await res.json());
       }
@@ -830,9 +832,14 @@ export default function BillInvoicePage() {
         notes: formNotes
       };
 
+      const token = getAuthToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
       const res = await fetch(`${apiUrl}/invoices/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
+        credentials: "include",
         body: JSON.stringify(payload)
       });
 
@@ -859,7 +866,9 @@ export default function BillInvoicePage() {
   const handleDeleteInvoice = async (invoiceId: string) => {
     if (!confirm("Are you sure you want to delete this invoice?")) return;
     try {
-      const res = await fetch(`${apiUrl}/invoices/${invoiceId}`, { method: "DELETE" });
+      const token = getAuthToken();
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${apiUrl}/invoices/${invoiceId}`, { method: "DELETE", headers, credentials: "include" });
       if (res.ok) {
         showToast("Invoice deleted successfully.");
         setInvoices((prev) => prev.filter((i) => (i._id || i.id) !== invoiceId));

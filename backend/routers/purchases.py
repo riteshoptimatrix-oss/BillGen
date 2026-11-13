@@ -1,18 +1,18 @@
 from fastapi import APIRouter, Body, Request, HTTPException, status, Depends
 from fastapi.responses import JSONResponse
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from models import Purchase, PurchaseCreate, PurchaseUpdate
 from bson import ObjectId
 from datetime import datetime
-from security import get_current_user
+from security import get_optional_user
 
-router = APIRouter(prefix="/api/purchases", tags=["purchases"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/purchases", tags=["purchases"], dependencies=[Depends(get_optional_user)])
 
 @router.post("/", response_description="Add a new purchase entry", status_code=status.HTTP_201_CREATED, response_model=Purchase)
 async def create_purchase(
     request: Request,
     purchase: PurchaseCreate = Body(...),
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     purchase_dict = purchase.model_dump()
     
@@ -72,7 +72,7 @@ async def update_purchase(
     id: str,
     request: Request,
     purchase: PurchaseUpdate = Body(...),
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Purchase ID format")
@@ -93,7 +93,7 @@ async def update_purchase(
 async def delete_purchase(
     id: str,
     request: Request,
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Purchase ID format")

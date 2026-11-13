@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { getApiUrl } from "@/lib/api";
+import { getApiUrl, getAuthToken } from "@/lib/api";
 import {
   Customer,
   CustomerFilterState,
@@ -57,7 +57,9 @@ export default function CustomersPage() {
   const refreshCustomerList = useCallback(async () => {
     try {
       const apiUrl = getApiUrl();
-      const res = await fetch(`${apiUrl}/customers/`);
+      const token = getAuthToken();
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${apiUrl}/customers/`, { headers, credentials: "include" });
       if (res.ok) {
         const data = await res.json();
         setCustomers(data || []);
@@ -77,7 +79,9 @@ export default function CustomersPage() {
     (async () => {
       try {
         const apiUrl = getApiUrl();
-        const res = await fetch(`${apiUrl}/customers/`);
+        const token = getAuthToken();
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await fetch(`${apiUrl}/customers/`, { headers, credentials: "include" });
         if (res.ok && !ignore) {
           const data = await res.json();
           setCustomers(data || []);
@@ -252,8 +256,12 @@ export default function CustomersPage() {
     if (!customer._id) return;
     try {
       const apiUrl = getApiUrl();
+      const token = getAuthToken();
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       const res = await fetch(`${apiUrl}/customers/${customer._id}`, {
-        method: "DELETE"
+        method: "DELETE",
+        headers,
+        credentials: "include"
       });
 
       if (res.ok) {

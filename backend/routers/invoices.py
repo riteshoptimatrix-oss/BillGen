@@ -117,16 +117,16 @@ async def get_next_invoice_number_internal(mongodb) -> str:
 @router.get("/next-number", response_description="Get next available invoice number")
 async def get_next_invoice_number(
     request: Request,
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ) -> Dict[str, str]:
     next_number = await get_next_invoice_number_internal(request.app.mongodb)
     return {"next_number": next_number}
 
-@router.post("/", response_description="Create a new invoice", status_code=status.HTTP_201_CREATED, response_model=Invoice)
+@router.post("/", response_description="Create or update an invoice", status_code=status.HTTP_201_CREATED, response_model=Invoice)
 async def create_invoice(
     request: Request,
     invoice: InvoiceCreate = Body(...),
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     invoice_dict = invoice.model_dump()
     
@@ -138,44 +138,56 @@ async def create_invoice(
     if not invoice_dict.get("date"):
         invoice_dict["date"] = datetime.now().strftime("%Y-%m-%d")
 
-    new_invoice = await request.app.mongodb["invoices"].insert_one(invoice_dict)
-    created_invoice = await request.app.mongodb["invoices"].find_one(
-        {"_id": new_invoice.inserted_id},
-        {"pdf_base64": 0}
-    )
+    # PREVENT DUPLICATES: If an invoice with this invoice_number already exists, update it cleanly
+    existing = await request.app.mongodb["invoices"].find_one({"invoice_number": invoice_dict["invoice_number"]})
+    if existing:
+        await request.app.mongodb["invoices"].update_one(
+            {"_id": existing["_id"]},
+            {"$set": invoice_dict}
+        )
+        created_invoice = await request.app.mongodb["invoices"].find_one(
+            {"_id": existing["_id"]},
+            {"pdf_base64": 0}
+        )
+    else:
+        new_invoice = await request.app.mongodb["invoices"].insert_one(invoice_dict)
+        created_invoice = await request.app.mongodb["invoices"].find_one(
+            {"_id": new_invoice.inserted_id},
+            {"pdf_base64": 0}
+        )
 
-    # Automatically update stock quantities for finalized invoice items
-    if invoice_dict.get("items"):
-        for item in invoice_dict["items"]:
-            qty = int(float(item.get("quantity", 0)))
-            if qty > 0:
-                prod_id = item.get("product_id")
-                if prod_id and ObjectId.is_valid(prod_id):
-                    await request.app.mongodb["products"].update_one(
-                        {"_id": ObjectId(prod_id)},
-                        {"$inc": {"stock": -qty}}
-                    )
-                    # Check low stock threshold
-                    updated_prod = await request.app.mongodb["products"].find_one({"_id": ObjectId(prod_id)})
-                    if updated_prod and updated_prod.get("stock", 0) < 10:
-                        try:
-                            from routers.notifications import broadcast_notification
-                            await broadcast_notification(
-                                request.app.mongodb,
-                                title=f"Low Stock Alert: {updated_prod.get('name')}",
-                                message=f"Only {updated_prod.get('stock')} units left in stock! Restock advised.",
-                                type="stock",
-                                link="/products"
-                            )
-                        except Exception:
-                            pass
-                elif item.get("description"):
-                    await request.app.mongodb["products"].update_one(
-                        {"name": item.get("description")},
-                        {"$inc": {"stock": -qty}}
-                    )
+        # Automatically update stock quantities for finalized invoice items on new creation
+        if invoice_dict.get("items"):
+            for item in invoice_dict["items"]:
+                qty = int(float(item.get("quantity", 0)))
+                if qty > 0:
+                    prod_id = item.get("product_id")
+                    if prod_id and ObjectId.is_valid(prod_id):
+                        await request.app.mongodb["products"].update_one(
+                            {"_id": ObjectId(prod_id)},
+                            {"$inc": {"stock": -qty}}
+                        )
+                        # Check low stock threshold
+                        updated_prod = await request.app.mongodb["products"].find_one({"_id": ObjectId(prod_id)})
+                        if updated_prod and updated_prod.get("stock", 0) < 10:
+                            try:
+                                from routers.notifications import broadcast_notification
+                                await broadcast_notification(
+                                    request.app.mongodb,
+                                    title=f"Low Stock Alert: {updated_prod.get('name')}",
+                                    message=f"Only {updated_prod.get('stock')} units left in stock! Restock advised.",
+                                    type="stock",
+                                    link="/products"
+                                )
+                            except Exception:
+                                pass
+                    elif item.get("description"):
+                        await request.app.mongodb["products"].update_one(
+                            {"name": item.get("description")},
+                            {"$inc": {"stock": -qty}}
+                        )
 
-    # Real-Time Broadcast Notification for newly created invoice
+    # Real-Time Broadcast Notification for newly created/updated invoice
     try:
         from routers.notifications import broadcast_notification
         inv_num = created_invoice.get("invoice_number", "INV")
@@ -183,10 +195,10 @@ async def create_invoice(
         amt = created_invoice.get("amount", 0)
         await broadcast_notification(
             request.app.mongodb,
-            title=f"New Invoice Created: {inv_num}",
-            message=f"Invoice for ₹{amt:,.2f} generated for {client_name}",
+            title=f"Sales Bill Synced: {inv_num}",
+            message=f"Invoice for ₹{amt:,.2f} recorded for {client_name}",
             type="invoice",
-            link="/bill-invoice"
+            link="/finance"
         )
     except Exception:
         pass
@@ -196,10 +208,10 @@ async def create_invoice(
 @router.get("/", response_description="List all invoices", response_model=List[Invoice])
 async def list_invoices(
     request: Request,
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     # CRITICAL PERFORMANCE BOOST: Exclude heavy pdf_base64 payload from list queries
-    invoices = await request.app.mongodb["invoices"].find({}, {"pdf_base64": 0}).sort("_id", -1).to_list(1000)
+    invoices = await request.app.mongodb["invoices"].find({}, {"pdf_base64": 0}).sort("date", -1).sort("_id", -1).to_list(1000)
     
     current_year = datetime.now().year
     for idx, inv in enumerate(invoices):
@@ -213,7 +225,7 @@ async def list_invoices(
 async def show_invoice(
     id: str,
     request: Request,
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Invoice ID format")
@@ -228,7 +240,7 @@ async def update_invoice(
     id: str,
     request: Request,
     invoice: InvoiceUpdate = Body(...),
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Invoice ID format")
@@ -252,7 +264,7 @@ async def update_invoice(
                     title=f"Invoice Status: {inv_num}",
                     message=f"Invoice for {client_name} marked as {st}",
                     type="payment" if st == "Paid" else "invoice",
-                    link="/bill-invoice"
+                    link="/finance"
                 )
             except Exception:
                 pass
@@ -264,14 +276,29 @@ async def update_invoice(
 async def delete_invoice(
     id: str,
     request: Request,
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Invoice ID format")
         
+    # Restore stock for deleted invoice items
+    invoice = await request.app.mongodb["invoices"].find_one({"_id": ObjectId(id)})
+    if invoice and invoice.get("items"):
+        for item in invoice["items"]:
+            qty = int(float(item.get("quantity", 0)))
+            if qty > 0:
+                prod_id = item.get("product_id")
+                if prod_id and ObjectId.is_valid(prod_id):
+                    await request.app.mongodb["products"].update_one(
+                        {"_id": ObjectId(prod_id)},
+                        {"$inc": {"stock": qty}}
+                    )
+
     delete_result = await request.app.mongodb["invoices"].delete_one({"_id": ObjectId(id)})
 
     if delete_result.deleted_count == 1:
         return JSONResponse(status_code=status.HTTP_204_NO_CONTENT, content=None)
+
+    raise HTTPException(status_code=404, detail=f"Invoice {id} not found")
 
     raise HTTPException(status_code=404, detail=f"Invoice {id} not found")

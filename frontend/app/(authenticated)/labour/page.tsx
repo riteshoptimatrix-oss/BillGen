@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { getApiUrl } from "@/lib/api";
+import { getApiUrl, getAuthToken } from "@/lib/api";
 import {
   Labour,
   LabourFilterState,
@@ -56,7 +56,9 @@ export default function LabourManagementPage() {
   const refreshLabourList = useCallback(async () => {
     try {
       const apiUrl = getApiUrl();
-      const res = await fetch(`${apiUrl}/labours/`);
+      const token = getAuthToken();
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${apiUrl}/labours/`, { headers, credentials: "include" });
       if (res.ok) {
         const data = await res.json();
         const formatted: Labour[] = (data || []).map((l: any, idx: number) => ({
@@ -85,7 +87,9 @@ export default function LabourManagementPage() {
     (async () => {
       try {
         const apiUrl = getApiUrl();
-        const res = await fetch(`${apiUrl}/labours/`);
+        const token = getAuthToken();
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await fetch(`${apiUrl}/labours/`, { headers, credentials: "include" });
         if (res.ok && !ignore) {
           const data = await res.json();
           const formatted: Labour[] = (data || []).map((l: any, idx: number) => ({
@@ -260,8 +264,12 @@ export default function LabourManagementPage() {
     if (!labour._id) return;
     try {
       const apiUrl = getApiUrl();
+      const token = getAuthToken();
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       const res = await fetch(`${apiUrl}/labours/${labour._id}`, {
-        method: "DELETE"
+        method: "DELETE",
+        headers,
+        credentials: "include"
       });
 
       if (res.ok) {

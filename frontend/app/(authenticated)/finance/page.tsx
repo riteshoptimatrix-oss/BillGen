@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { getApiUrl } from "@/lib/api";
+import { getApiUrl, getAuthToken } from "@/lib/api";
 
 interface SalesRecord {
   id: string;
@@ -96,14 +96,42 @@ export default function FinancePage() {
     }, 3500);
   };
 
+  // Quick status update for a sale / invoice
+  const handleUpdateSaleStatus = async (saleId: string, newStatus: "Paid" | "Pending" | "Overdue") => {
+    try {
+      const token = getAuthToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await fetch(`${apiUrl}/finance/sales/${saleId}/status`, {
+        method: "PATCH",
+        headers,
+        credentials: "include",
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (res.ok) {
+        showToast(`Invoice status updated to ${newStatus}`);
+        if (selectedSale && selectedSale.id === saleId) {
+          setSelectedSale({ ...selectedSale, status: newStatus });
+        }
+        fetchFinanceData();
+      } else {
+        showToast("Failed to update status");
+      }
+    } catch {
+      showToast("Error updating status");
+    }
+  };
+
   // Fetch all finance data
   const fetchFinanceData = async () => {
     try {
       setIsRefreshing(true);
+      const token = getAuthToken();
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
       const [salesRes, purchasesRes, overviewRes] = await Promise.all([
-        fetch(`${apiUrl}/finance/sales`),
-        fetch(`${apiUrl}/purchases/`),
-        fetch(`${apiUrl}/finance/overview`)
+        fetch(`${apiUrl}/finance/sales`, { headers, credentials: "include" }),
+        fetch(`${apiUrl}/purchases/`, { headers, credentials: "include" }),
+        fetch(`${apiUrl}/finance/overview`, { headers, credentials: "include" })
       ]);
 
       if (salesRes.ok) {
@@ -271,15 +299,15 @@ export default function FinancePage() {
     });
   }, [purchases, purchaseSearch, purchaseStatusFilter]);
 
-  // Derived Totals
-  const totalSalesAmount = overview?.totalSales ?? 1512760;
-  const paidSalesAmount = overview?.paidSales ?? 947540;
-  const pendingSalesAmount = overview?.pendingSales ?? 565220;
+  // Derived Totals (100% dynamic based purely on real database data)
+  const totalSalesAmount = overview?.totalSales ?? sales.reduce((acc, s) => acc + (s.amount || 0), 0);
+  const paidSalesAmount = overview?.paidSales ?? sales.filter(s => s.status === "Paid").reduce((acc, s) => acc + (s.amount || 0), 0);
+  const pendingSalesAmount = overview?.pendingSales ?? sales.filter(s => s.status !== "Paid").reduce((acc, s) => acc + (s.amount || 0), 0);
   const salesCount = overview?.salesCount ?? sales.length;
 
-  const totalPurchaseAmount = overview?.totalPurchases ?? 803500;
-  const paidPurchaseAmount = overview?.paidPurchases ?? 604500;
-  const pendingPurchaseAmount = overview?.pendingPurchases ?? 199000;
+  const totalPurchaseAmount = overview?.totalPurchases ?? purchases.reduce((acc, p) => acc + (p.amount || 0), 0);
+  const paidPurchaseAmount = overview?.paidPurchases ?? purchases.filter(p => p.status === "Paid").reduce((acc, p) => acc + (p.amount || 0), 0);
+  const pendingPurchaseAmount = overview?.pendingPurchases ?? purchases.filter(p => p.status !== "Paid").reduce((acc, p) => acc + (p.amount || 0), 0);
   const purchasesCount = overview?.purchasesCount ?? purchases.length;
 
   const netBalance = overview?.netBalance ?? (totalSalesAmount - totalPurchaseAmount);
@@ -576,47 +604,62 @@ export default function FinancePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#f1f5f9] text-xs">
-                  {filteredSales.map((s) => (
-                    <tr key={s.id} className="hover:bg-[#f8fafc] transition-colors">
-                      {/* Invoice Pill */}
-                      <td className="py-3 px-2.5 font-mono font-bold text-[#0f172a]">
-                        <span className="bg-[#f5ede6] text-[#0260de] px-2 py-0.5 rounded-lg text-[11px] font-bold">
-                          {s.invoice_number}
-                        </span>
-                      </td>
-
-                      {/* Customer Name */}
-                      <td className="py-3 px-2.5 font-bold text-[#0f172a] truncate max-w-[130px]" title={s.customer_name}>
-                        {s.customer_name}
-                      </td>
-
-                      {/* Date */}
-                      <td className="py-3 px-2.5 font-medium text-[#64748b] whitespace-nowrap">
-                        {s.date}
-                      </td>
-
-                      {/* Total Amount */}
-                      <td className="py-3 px-2.5 font-black text-[#0f172a] whitespace-nowrap">
-                        ₹{s.amount.toLocaleString("en-IN")}
-                      </td>
-
-                      {/* Payment Status */}
-                      <td className="py-3 px-2.5 text-center whitespace-nowrap">
-                        {renderStatusBadge(s.status)}
-                      </td>
-
-                      {/* Action */}
-                      <td className="py-3 px-2.5 text-right whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedSale(s)}
-                          className="text-[#64748b] hover:text-[#0260de] font-bold text-xs inline-flex items-center gap-0.5"
-                        >
-                          Detail &gt;
-                        </button>
+                  {filteredSales.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-12 text-center text-slate-400 text-xs">
+                        No sales records found. As soon as a bill/invoice is generated, it will automatically appear here!
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredSales.map((s) => (
+                      <tr key={s.id} className="hover:bg-[#f8fafc] transition-colors">
+                        {/* Invoice Pill */}
+                        <td className="py-3 px-2.5 font-mono font-bold text-[#0f172a]">
+                          <span className="bg-[#f5ede6] text-[#0260de] px-2 py-0.5 rounded-lg text-[11px] font-bold">
+                            {s.invoice_number}
+                          </span>
+                        </td>
+
+                        {/* Customer Name */}
+                        <td className="py-3 px-2.5 font-bold text-[#0f172a] truncate max-w-[130px]" title={s.customer_name}>
+                          {s.customer_name}
+                        </td>
+
+                        {/* Date */}
+                        <td className="py-3 px-2.5 font-medium text-[#64748b] whitespace-nowrap">
+                          {s.date}
+                        </td>
+
+                        {/* Total Amount */}
+                        <td className="py-3 px-2.5 font-black text-[#0f172a] whitespace-nowrap">
+                          ₹{s.amount.toLocaleString("en-IN")}
+                        </td>
+
+                        {/* Payment Status with Quick Toggle */}
+                        <td className="py-3 px-2.5 text-center whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateSaleStatus(s.id, s.status === "Paid" ? "Pending" : "Paid")}
+                            title="Click to toggle payment status"
+                            className="cursor-pointer hover:opacity-85 transition-opacity"
+                          >
+                            {renderStatusBadge(s.status)}
+                          </button>
+                        </td>
+
+                        {/* Action */}
+                        <td className="py-3 px-2.5 text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedSale(s)}
+                            className="text-[#64748b] hover:text-[#0260de] font-bold text-xs inline-flex items-center gap-0.5 cursor-pointer"
+                          >
+                            Detail &gt;
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1006,7 +1049,16 @@ export default function FinancePage() {
               </div>
               <div className="flex justify-between py-1 border-b border-[#f8fafc] items-center">
                 <span className="text-[#64748b] font-medium">Payment Status:</span>
-                {renderStatusBadge(selectedSale.status)}
+                <div className="flex items-center gap-2">
+                  {renderStatusBadge(selectedSale.status)}
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateSaleStatus(selectedSale.id, selectedSale.status === "Paid" ? "Pending" : "Paid")}
+                    className="text-[11px] font-bold text-[#0260de] underline hover:opacity-80 cursor-pointer"
+                  >
+                    Mark as {selectedSale.status === "Paid" ? "Pending" : "Paid"}
+                  </button>
+                </div>
               </div>
 
               {selectedSale.items && selectedSale.items.length > 0 && (

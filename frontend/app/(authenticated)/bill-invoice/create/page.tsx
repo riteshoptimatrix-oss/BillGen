@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { getApiUrl, formatImageUrl } from "@/lib/api";
+import { getApiUrl, formatImageUrl, getAuthToken } from "@/lib/api";
 import { exportElementToPDF } from "@/lib/pdf";
 import InvoicePrintDocument from "@/components/invoice/InvoicePrintDocument";
 import ProductIllustration from "@/components/products/ProductIllustration";
@@ -179,10 +179,12 @@ export default function CreateInvoicePage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const token = getAuthToken();
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
         const [cRes, pRes, numRes] = await Promise.all([
-          fetch(`${apiUrl}/customers/`),
-          fetch(`${apiUrl}/products/`),
-          fetch(`${apiUrl}/invoices/next-number`)
+          fetch(`${apiUrl}/customers/`, { headers, credentials: "include" }),
+          fetch(`${apiUrl}/products/`, { headers, credentials: "include" }),
+          fetch(`${apiUrl}/invoices/next-number`, { headers, credentials: "include" })
         ]);
 
         if (cRes.ok) {
@@ -200,7 +202,7 @@ export default function CreateInvoicePage() {
 
         if (numRes.ok) {
           const numData = await numRes.json();
-          setInvoiceNumber(numData.next_number || "INV-2026-0005");
+          setInvoiceNumber(numData.next_number || `INV-${new Date().getFullYear()}-0001`);
         }
       } catch (err) {
         console.error("Failed to load initial data", err);
@@ -473,9 +475,14 @@ export default function CreateInvoicePage() {
         notes: termsText
       };
 
+      const token = getAuthToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
       const res = await fetch(`${apiUrl}/invoices/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
+        credentials: "include",
         body: JSON.stringify(payload)
       });
 

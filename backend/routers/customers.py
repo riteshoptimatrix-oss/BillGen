@@ -1,17 +1,17 @@
 from fastapi import APIRouter, Body, Request, HTTPException, status, Depends
 from fastapi.responses import JSONResponse
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from models import Customer, CustomerCreate, CustomerUpdate
 from bson import ObjectId
-from security import get_current_user
+from security import get_optional_user
 
-router = APIRouter(prefix="/api/customers", tags=["customers"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/customers", tags=["customers"], dependencies=[Depends(get_optional_user)])
 
 @router.post("/", response_description="Add new customer", status_code=status.HTTP_201_CREATED, response_model=Customer)
 async def create_customer(
     request: Request,
     customer: CustomerCreate = Body(...),
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     customer_dict = customer.model_dump()
     new_customer = await request.app.mongodb["customers"].insert_one(customer_dict)
@@ -53,7 +53,7 @@ async def update_customer(
     id: str,
     request: Request,
     customer: CustomerUpdate = Body(...),
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Customer ID format")
@@ -79,7 +79,7 @@ async def update_customer(
 async def delete_customer(
     id: str,
     request: Request,
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Customer ID format")

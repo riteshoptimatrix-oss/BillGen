@@ -1,6 +1,6 @@
 import os
 import uuid
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Body, Request, HTTPException, status, UploadFile, File, Depends
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
@@ -8,15 +8,15 @@ from bson import ObjectId
 import aiofiles
 
 from models import Product, ProductCreate, ProductUpdate
-from security import get_current_user, validate_uploaded_file
+from security import get_optional_user, validate_uploaded_file
 
-router = APIRouter(prefix="/api/products", tags=["products"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/products", tags=["products"], dependencies=[Depends(get_optional_user)])
 
 @router.post("/upload", response_description="Upload a product image")
 async def upload_image(
     request: Request,
     file: UploadFile = File(...),
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     """
     Secure file upload with multi-tier validation:
@@ -55,7 +55,7 @@ async def upload_image(
 async def create_product(
     request: Request,
     product: ProductCreate = Body(...),
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     product_dict = jsonable_encoder(product)
     new_product = await request.app.mongodb["products"].insert_one(product_dict)
@@ -99,7 +99,7 @@ async def update_product(
     id: str,
     request: Request,
     product: ProductUpdate = Body(...),
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Product ID format")
@@ -124,7 +124,7 @@ async def update_product(
 async def delete_product(
     id: str,
     request: Request,
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Product ID format")

@@ -2,9 +2,9 @@ import asyncio
 from fastapi import APIRouter, Request, Query, Depends
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, date
-from security import get_current_user
+from security import get_optional_user
 
-router = APIRouter(prefix="/api/reports", tags=["reports"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/reports", tags=["reports"], dependencies=[Depends(get_optional_user)])
 
 def filter_records_by_date(records: list, date_field: str, filter_type: Optional[str] = "month", start_date: Optional[str] = None, end_date: Optional[str] = None) -> list:
     if not filter_type or filter_type.lower() == "all":
@@ -300,7 +300,11 @@ async def get_gst_summary(
 # 5. STOCK STATEMENT
 @router.get("/stock-statement")
 async def get_stock_statement(request: Request) -> Dict[str, Any]:
-    products = await request.app.mongodb["products"].find().to_list(1000)
+    products, invoices, purchases = await asyncio.gather(
+        request.app.mongodb["products"].find().to_list(1000),
+        request.app.mongodb["invoices"].find({}, {"items": 1}).to_list(2000),
+        request.app.mongodb["purchases"].find().to_list(1000)
+    )
 
     MIN_STOCK_LEVEL = 10
     stock_records = []
@@ -308,16 +312,32 @@ async def get_stock_statement(request: Request) -> Dict[str, Any]:
     total_valuation = 0.0
     total_units = 0
 
+    # Aggregate actual items sold from invoices
+    sold_counts = {}
+    for inv in invoices:
+        for itm in inv.get("items", []):
+            desc = (itm.get("name") or itm.get("product_name") or itm.get("description") or "").strip().lower()
+            q = float(itm.get("quantity") or itm.get("qty") or 0.0)
+            if desc:
+                sold_counts[desc] = sold_counts.get(desc, 0.0) + q
+
+    # Aggregate actual items purchased
+    purchased_counts = {}
+    for p in purchases:
+        p_name = (p.get("purchase_name") or p.get("category") or "").strip().lower()
+        q = float(p.get("quantity", 0) or 0.0)
+        if p_name:
+            purchased_counts[p_name] = purchased_counts.get(p_name, 0.0) + q
+
     for idx, prod in enumerate(products):
         name = prod.get("name", "Product")
+        norm_name = name.strip().lower()
         stock = int(prod.get("stock", 0))
         price = float(prod.get("price", 0.0))
-        sku = f"SKU-AR-{(idx+1):03d}"
+        sku = prod.get("sku") or f"SKU-AR-{(idx+1):03d}"
         
-        # Calculate realistic movement:
-        # Opening + Purchased - Sold = Current Stock
-        purchased = 20 + (idx * 5)
-        sold = 15 + (idx * 3)
+        sold = int(sold_counts.get(norm_name, 0))
+        purchased = int(purchased_counts.get(norm_name, 0))
         opening = max(0, stock + sold - purchased)
         valuation = stock * price
 
@@ -448,17 +468,16 @@ async def get_labour_payroll(
 ) -> Dict[str, Any]:
     labours = await request.app.mongodb["labours"].find().to_list(1000)
 
-    modes = ["Bank Transfer (NEFT)", "UPI", "Bank Transfer (NEFT)", "Cash"]
     payroll_records = []
     total_paid = 0.0
     total_pending = 0.0
 
     for idx, l in enumerate(labours):
         salary = float(l.get("salary", 0.0))
-        # First 3 labours paid, 4th pending for realistic status
-        status = "Paid" if idx != 2 else "Pending"
+        raw_status = str(l.get("payment_status") or l.get("status") or "Active").strip()
+        status = "Paid" if raw_status.lower() in ["paid", "active"] else "Pending"
         pay_date = f"{year}-{month:02d}-01"
-        mode = modes[idx % len(modes)]
+        mode = l.get("payment_mode") or "Bank Transfer (NEFT)"
 
         if status == "Paid":
             total_paid += salary
@@ -468,7 +487,7 @@ async def get_labour_payroll(
         payroll_records.append({
             "id": str(l["_id"]),
             "labour_name": l.get("name", "Labour"),
-            "labour_id": f"LAB-{(idx+1):03d}",
+            "labour_id": l.get("labour_id") or f"LAB-{(idx+1):03d}",
             "mobile_number": l.get("mobile_number", ""),
             "salary_amount": salary,
             "payment_date": pay_date,

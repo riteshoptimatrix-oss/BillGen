@@ -1,6 +1,6 @@
 import os
 import uuid
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Body, Request, HTTPException, status, UploadFile, File, Depends
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
@@ -8,15 +8,15 @@ from bson import ObjectId
 import aiofiles
 
 from models import Labour, LabourCreate, LabourUpdate
-from security import get_current_user, validate_uploaded_file
+from security import get_optional_user, validate_uploaded_file
 
-router = APIRouter(prefix="/api/labours", tags=["labours"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/labours", tags=["labours"], dependencies=[Depends(get_optional_user)])
 
 @router.post("/upload", response_description="Upload a labour profile image")
 async def upload_image(
     request: Request,
     file: UploadFile = File(...),
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     """
     Secure file upload with multi-tier validation:
@@ -55,7 +55,7 @@ async def upload_image(
 async def create_labour(
     request: Request,
     labour: LabourCreate = Body(...),
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     labour_dict = jsonable_encoder(labour)
     new_labour = await request.app.mongodb["labours"].insert_one(labour_dict)
@@ -83,7 +83,7 @@ async def update_labour(
     id: str,
     request: Request,
     labour: LabourUpdate = Body(...),
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Labour ID format")
@@ -108,7 +108,7 @@ async def update_labour(
 async def delete_labour(
     id: str,
     request: Request,
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ):
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Labour ID format")
