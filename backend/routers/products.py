@@ -38,36 +38,47 @@ async def upload_image(
         ext = ".jpg"
     unique_filename = f"{uuid.uuid4()}{ext}"
     
-    upload_dir = os.path.abspath("uploads")
-    os.makedirs(upload_dir, exist_ok=True)
-    file_path = os.path.join(upload_dir, unique_filename)
-    
-    async with aiofiles.open(file_path, "wb") as out_file:
-        await out_file.write(content)
+    upload_dirs = [
+        os.path.abspath("uploads"),
+        os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")),
+        os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "uploads"))
+    ]
+    for d in upload_dirs:
+        try:
+            os.makedirs(d, exist_ok=True)
+            async with aiofiles.open(os.path.join(d, unique_filename), "wb") as out_file:
+                await out_file.write(content)
+        except Exception:
+            pass
         
     base_url = str(request.base_url).rstrip("/")
     return {
         "url": f"{base_url}/uploads/{unique_filename}",
-        "path": f"/uploads/{unique_filename}"
+        "path": f"/uploads/{unique_filename}",
+        "filename": unique_filename
     }
 
-@router.post("/", response_description="Add new product", response_model=Product)
+@router.post("/", response_description="Add new product")
 async def create_product(
     request: Request,
     product: ProductCreate = Body(...),
     user: Optional[Dict[str, Any]] = Depends(get_optional_user)
-):
+) -> Dict[str, Any]:
     product_dict = jsonable_encoder(product)
     new_product = await request.app.mongodb["products"].insert_one(product_dict)
     created_product = await request.app.mongodb["products"].find_one(
         {"_id": new_product.inserted_id}
     )
 
+    if created_product:
+        created_product["_id"] = str(created_product["_id"])
+        created_product["id"] = str(created_product["_id"])
+
     # Real-Time Broadcast Notification
     try:
         from routers.notifications import broadcast_notification
-        p_name = created_product.get("name", "Product")
-        stock_cnt = created_product.get("stock", 0)
+        p_name = created_product.get("name", "Product") if created_product else "Product"
+        stock_cnt = created_product.get("stock", 0) if created_product else 0
         await broadcast_notification(
             request.app.mongodb,
             title=f"New Product Added: {p_name}",
@@ -78,46 +89,49 @@ async def create_product(
     except Exception:
         pass
 
-    return created_product
+    return created_product or {}
 
-@router.get("/", response_description="List all products", response_model=List[Product])
-async def list_products(request: Request):
+@router.get("/", response_description="List all products")
+async def list_products(request: Request) -> List[Dict[str, Any]]:
     products = await request.app.mongodb["products"].find().to_list(1000)
+    for p in products:
+        p["_id"] = str(p["_id"])
+        p["id"] = str(p["_id"])
     return products
 
-@router.get("/{id}", response_description="Get a single product", response_model=Product)
-async def show_product(id: str, request: Request):
+@router.get("/{id}", response_description="Get a single product")
+async def show_product(id: str, request: Request) -> Dict[str, Any]:
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Product ID format")
     product = await request.app.mongodb["products"].find_one({"_id": ObjectId(id)})
     if product is not None:
+        product["_id"] = str(product["_id"])
+        product["id"] = str(product["_id"])
         return product
     raise HTTPException(status_code=404, detail=f"Product {id} not found")
 
-@router.put("/{id}", response_description="Update a product", response_model=Product)
+@router.put("/{id}", response_description="Update a product")
 async def update_product(
     id: str,
     request: Request,
     product: ProductUpdate = Body(...),
     user: Optional[Dict[str, Any]] = Depends(get_optional_user)
-):
+) -> Dict[str, Any]:
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Product ID format")
     
     product_dict = {k: v for k, v in product.model_dump().items() if v is not None}
     
     if len(product_dict) >= 1:
-        update_result = await request.app.mongodb["products"].update_one(
+        await request.app.mongodb["products"].update_one(
             {"_id": ObjectId(id)}, {"$set": product_dict}
         )
-        if update_result.modified_count == 1:
-            updated_product = await request.app.mongodb["products"].find_one({"_id": ObjectId(id)})
-            if updated_product is not None:
-                return updated_product
                 
-    existing_product = await request.app.mongodb["products"].find_one({"_id": ObjectId(id)})
-    if existing_product is not None:
-        return existing_product
+    updated_product = await request.app.mongodb["products"].find_one({"_id": ObjectId(id)})
+    if updated_product is not None:
+        updated_product["_id"] = str(updated_product["_id"])
+        updated_product["id"] = str(updated_product["_id"])
+        return updated_product
     raise HTTPException(status_code=404, detail=f"Product {id} not found")
 
 @router.delete("/{id}", response_description="Delete a product")

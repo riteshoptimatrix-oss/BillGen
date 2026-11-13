@@ -78,59 +78,10 @@ async def list_labours(request: Request):
     labours = await request.app.mongodb["labours"].find().to_list(1000)
     return labours
 
-@router.get("/{id}", response_description="Get a single labour", response_model=Labour)
-async def show_labour(id: str, request: Request):
-    if not ObjectId.is_valid(id):
-        raise HTTPException(status_code=400, detail="Invalid Labour ID format")
-    labour = await request.app.mongodb["labours"].find_one({"_id": ObjectId(id)})
-    if labour is not None:
-        return labour
-    raise HTTPException(status_code=404, detail=f"Labour {id} not found")
-
-@router.put("/{id}", response_description="Update a labour", response_model=Labour)
-async def update_labour(
-    id: str,
-    request: Request,
-    labour: LabourUpdate = Body(...),
-    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
-):
-    if not ObjectId.is_valid(id):
-        raise HTTPException(status_code=400, detail="Invalid Labour ID format")
-    
-    labour_dict = {k: v for k, v in labour.model_dump().items() if v is not None}
-    
-    if len(labour_dict) >= 1:
-        update_result = await request.app.mongodb["labours"].update_one(
-            {"_id": ObjectId(id)}, {"$set": labour_dict}
-        )
-        if update_result.modified_count == 1:
-            updated_labour = await request.app.mongodb["labours"].find_one({"_id": ObjectId(id)})
-            if updated_labour is not None:
-                return updated_labour
-                
-    existing_labour = await request.app.mongodb["labours"].find_one({"_id": ObjectId(id)})
-    if existing_labour is not None:
-        return existing_labour
-    raise HTTPException(status_code=404, detail=f"Labour {id} not found")
-
-@router.delete("/{id}", response_description="Delete a labour")
-async def delete_labour(
-    id: str,
-    request: Request,
-    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
-):
-    if not ObjectId.is_valid(id):
-        raise HTTPException(status_code=400, detail="Invalid Labour ID format")
-    
-    delete_result = await request.app.mongodb["labours"].delete_one({"_id": ObjectId(id)})
-    
-    if delete_result.deleted_count == 1:
-        return JSONResponse(status_code=status.HTTP_204_NO_CONTENT, content=None)
-    
-    raise HTTPException(status_code=404, detail=f"Labour {id} not found")
-
 # ==============================================================================
 # SALARY & PAYROLL MANAGEMENT MODULE
+# NOTE: Defined BEFORE parameterized /{id} wildcard routes so FastAPI doesn't
+# incorrectly match "salaries" as an ObjectId path parameter {id}.
 # ==============================================================================
 
 @router.get("/salaries", response_description="Get month-wise salary ledger with auto-generated records")
@@ -145,7 +96,10 @@ async def get_monthly_salaries(
     cur_year = year if year and year > 2000 else now.year
     
     db = request.app.mongodb
-    labours = await db["labours"].find({"status": {"$in": ["Active", "active"]}}).to_list(1000)
+    # Include all enrolled staff (excluding only explicitly inactive/terminated)
+    labours = await db["labours"].find({
+        "status": {"$nin": ["Inactive", "inactive", "Terminated", "terminated"]}
+    }).to_list(1000)
     
     # 1. Fetch existing salary records for the selected month & year
     existing_salaries = await db["salaries"].find({
@@ -393,4 +347,55 @@ async def get_labour_salary_history(
         "totalPending": round(total_pending, 2),
         "history": formatted
     }
+
+@router.get("/{id}", response_description="Get a single labour", response_model=Labour)
+async def show_labour(id: str, request: Request):
+    if not ObjectId.is_valid(id):
+        raise HTTPException(status_code=400, detail="Invalid Labour ID format")
+    labour = await request.app.mongodb["labours"].find_one({"_id": ObjectId(id)})
+    if labour is not None:
+        return labour
+    raise HTTPException(status_code=404, detail=f"Labour {id} not found")
+
+@router.put("/{id}", response_description="Update a labour", response_model=Labour)
+async def update_labour(
+    id: str,
+    request: Request,
+    labour: LabourUpdate = Body(...),
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
+):
+    if not ObjectId.is_valid(id):
+        raise HTTPException(status_code=400, detail="Invalid Labour ID format")
+    
+    labour_dict = {k: v for k, v in labour.model_dump().items() if v is not None}
+    
+    if len(labour_dict) >= 1:
+        update_result = await request.app.mongodb["labours"].update_one(
+            {"_id": ObjectId(id)}, {"$set": labour_dict}
+        )
+        if update_result.modified_count == 1:
+            updated_labour = await request.app.mongodb["labours"].find_one({"_id": ObjectId(id)})
+            if updated_labour is not None:
+                return updated_labour
+                
+    existing_labour = await request.app.mongodb["labours"].find_one({"_id": ObjectId(id)})
+    if existing_labour is not None:
+        return existing_labour
+    raise HTTPException(status_code=404, detail=f"Labour {id} not found")
+
+@router.delete("/{id}", response_description="Delete a labour")
+async def delete_labour(
+    id: str,
+    request: Request,
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
+):
+    if not ObjectId.is_valid(id):
+        raise HTTPException(status_code=400, detail="Invalid Labour ID format")
+    
+    delete_result = await request.app.mongodb["labours"].delete_one({"_id": ObjectId(id)})
+    
+    if delete_result.deleted_count == 1:
+        return JSONResponse(status_code=status.HTTP_204_NO_CONTENT, content=None)
+    
+    raise HTTPException(status_code=404, detail=f"Labour {id} not found")
 

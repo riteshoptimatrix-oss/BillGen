@@ -236,19 +236,25 @@ export default function CustomersPage() {
     setFormModalOpen(true);
   };
 
-  const handleFormSuccess = (savedCustomer: Customer, isNew: boolean) => {
+  const handleFormSuccess = (savedCustomer: any, isNew: boolean) => {
+    const normCustomer: Customer = {
+      ...savedCustomer,
+      _id: savedCustomer._id || savedCustomer.id || `c_${Date.now()}`
+    };
     if (isNew) {
-      setCustomers((prev) => [savedCustomer, ...prev]);
-      showToast(`Customer "${savedCustomer.name}" added successfully`);
+      setCustomers((prev) => [normCustomer, ...prev.filter((c) => c._id !== normCustomer._id)]);
+      showToast(`Customer "${normCustomer.name}" added successfully`);
     } else {
       setCustomers((prev) =>
-        prev.map((c) => (c._id === savedCustomer._id ? savedCustomer : c))
+        prev.map((c) => (c._id === normCustomer._id ? normCustomer : c))
       );
-      if (quickViewCustomer && quickViewCustomer._id === savedCustomer._id) {
-        setQuickViewCustomer(savedCustomer);
+      if (quickViewCustomer && quickViewCustomer._id === normCustomer._id) {
+        setQuickViewCustomer(normCustomer);
       }
-      showToast(`Customer "${savedCustomer.name}" updated successfully`);
+      showToast(`Customer "${normCustomer.name}" updated successfully`);
     }
+    // Also trigger server refresh so catalog stays in sync
+    refreshCustomerList();
   };
 
   // Delete Handler

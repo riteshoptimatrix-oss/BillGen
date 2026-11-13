@@ -397,7 +397,7 @@ export default function LabourManagementPage() {
       </div>
 
       {activeModuleTab === "salary" ? (
-        <SalaryModule />
+        <SalaryModule initialLabours={labours} />
       ) : (
         <>
           {/* 1. PAGE HEADER */}

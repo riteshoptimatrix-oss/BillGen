@@ -206,18 +206,21 @@ async def create_invoice(
 
     return created_invoice
 
-@router.get("/", response_description="List all invoices", response_model=List[Invoice])
+@router.get("/", response_description="List all invoices", response_model=List[Dict[str, Any]])
 async def list_invoices(
     request: Request,
     user: Optional[Dict[str, Any]] = Depends(get_optional_user)
-):
+) -> List[Dict[str, Any]]:
     # CRITICAL PERFORMANCE BOOST: Exclude heavy pdf_base64 payload from list queries
     invoices = await request.app.mongodb["invoices"].find({}, {"pdf_base64": 0}).sort("date", -1).sort("_id", -1).to_list(1000)
     
     current_year = datetime.now().year
     for idx, inv in enumerate(invoices):
+        inv_id = str(inv["_id"])
+        inv["id"] = inv_id
+        inv["_id"] = inv_id
         if not inv.get("invoice_number"):
-            hex_suffix = str(inv["_id"])[-4:].upper()
+            hex_suffix = inv_id[-4:].upper()
             inv["invoice_number"] = f"INV-{current_year}-{hex_suffix}"
             
         tot = float(inv.get("amount", 0.0))
@@ -240,17 +243,20 @@ async def list_invoices(
 
     return invoices
 
-@router.get("/{id}", response_description="Get a single invoice", response_model=Invoice)
+@router.get("/{id}", response_description="Get a single invoice", response_model=Dict[str, Any])
 async def show_invoice(
     id: str,
     request: Request,
     user: Optional[Dict[str, Any]] = Depends(get_optional_user)
-):
+) -> Dict[str, Any]:
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Invoice ID format")
     if (invoice := await request.app.mongodb["invoices"].find_one({"_id": ObjectId(id)}, {"pdf_base64": 0})) is not None:
+        inv_id = str(invoice["_id"])
+        invoice["id"] = inv_id
+        invoice["_id"] = inv_id
         if not invoice.get("invoice_number"):
-            invoice["invoice_number"] = f"INV-{datetime.now().year}-{str(invoice['_id'])[-4:].upper()}"
+            invoice["invoice_number"] = f"INV-{datetime.now().year}-{inv_id[-4:].upper()}"
         
         tot = float(invoice.get("amount", 0.0))
         paid = float(invoice.get("amount_paid", 0.0))
@@ -271,13 +277,13 @@ async def show_invoice(
         return invoice
     raise HTTPException(status_code=404, detail=f"Invoice {id} not found")
 
-@router.put("/{id}", response_description="Update an invoice", response_model=Invoice)
+@router.put("/{id}", response_description="Update an invoice", response_model=Dict[str, Any])
 async def update_invoice(
     id: str,
     request: Request,
     invoice: InvoiceUpdate = Body(...),
     user: Optional[Dict[str, Any]] = Depends(get_optional_user)
-):
+) -> Dict[str, Any]:
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Invoice ID format")
         
@@ -289,6 +295,8 @@ async def update_invoice(
         )
 
     if (updated_invoice := await request.app.mongodb["invoices"].find_one({"_id": ObjectId(id)}, {"pdf_base64": 0})) is not None:
+        updated_invoice["id"] = str(updated_invoice["_id"])
+        updated_invoice["_id"] = str(updated_invoice["_id"])
         if "status" in invoice_dict:
             try:
                 from routers.notifications import broadcast_notification

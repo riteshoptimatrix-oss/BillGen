@@ -12,21 +12,16 @@ MOBILE_REGEX = re.compile(r"^(?:\+91|0)?[6-9]\d{9}$")
 IFSC_REGEX = re.compile(r"^[A-Z]{4}0[A-Z0-9]{6}$")
 
 def validate_gstin_format(val: Optional[str]) -> Optional[str]:
-    """Validate and normalize 15-character Indian Goods & Services Tax (GSTIN)."""
+    """Validate and normalize Indian Goods & Services Tax (GSTIN)."""
     if not val or not str(val).strip():
         return None
-    cleaned = str(val).strip().upper()
-    if not GSTIN_REGEX.match(cleaned):
-        raise ValueError(f"Invalid GSTIN format '{cleaned}'. Must be 15 alphanumeric characters (e.g., 24AAAFO1234F1Z9).")
-    return cleaned
+    return str(val).strip().upper()
 
 def validate_mobile_format(val: Optional[str]) -> str:
-    """Validate and normalize 10-digit Indian Mobile phone numbers."""
+    """Validate and normalize Indian Mobile phone numbers."""
     if not val or not str(val).strip():
-        raise ValueError("Mobile phone number is required.")
+        return ""
     cleaned = re.sub(r"[\s\-\(\)]", "", str(val).strip())
-    if not MOBILE_REGEX.match(cleaned):
-        raise ValueError(f"Invalid Indian mobile number '{val}'. Must be 10 digits starting with 6, 7, 8, or 9.")
     if cleaned.startswith("+91"):
         cleaned = cleaned[3:]
     elif cleaned.startswith("0") and len(cleaned) == 11:
@@ -34,24 +29,26 @@ def validate_mobile_format(val: Optional[str]) -> str:
     return cleaned
 
 def validate_ifsc_format(val: Optional[str]) -> Optional[str]:
-    """Validate and normalize 11-character Indian Financial System Code (IFSC)."""
+    """Validate and normalize Indian Financial System Code (IFSC)."""
     if not val or not str(val).strip():
         return None
-    cleaned = str(val).strip().upper()
-    if not IFSC_REGEX.match(cleaned):
-        raise ValueError(f"Invalid IFSC code '{cleaned}'. Expected 11 characters (e.g. BARB0ODHAVA, 5th character must be '0').")
-    return cleaned
+    return str(val).strip().upper()
 
 class ProductBase(BaseModel):
     name: str
     description: Optional[str] = None
     image: Optional[str] = None
+    gallery: Optional[List[str]] = None
     price: float = 0.0
+    cost_price: Optional[float] = 0.0
     stock: int = 0
+    min_stock_alert: Optional[int] = 5
     category: Optional[str] = "Chassis & Frame"
     unit: Optional[str] = "Piece (Pcs)"
     hsn_code: Optional[str] = "HSN8708"
     tax_rate: Optional[float] = 18.0
+    status: Optional[str] = "Active"
+    specifications: Optional[str] = None
 
 class ProductCreate(ProductBase):
     pass
@@ -60,12 +57,17 @@ class ProductUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     image: Optional[str] = None
+    gallery: Optional[List[str]] = None
     price: Optional[float] = None
+    cost_price: Optional[float] = None
     stock: Optional[int] = None
+    min_stock_alert: Optional[int] = None
     category: Optional[str] = None
     unit: Optional[str] = None
     hsn_code: Optional[str] = None
     tax_rate: Optional[float] = None
+    status: Optional[str] = None
+    specifications: Optional[str] = None
 
 class Product(ProductBase):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
@@ -172,17 +174,26 @@ class InvoiceBase(BaseModel):
     def check_customer_phone(cls, v: Optional[str]) -> Optional[str]:
         if not v or not str(v).strip():
             return None
-        return validate_mobile_format(v)
+        cleaned = re.sub(r"[\s\-\(\)]", "", str(v).strip())
+        if cleaned.startswith("+91"):
+            cleaned = cleaned[3:]
+        elif cleaned.startswith("0") and len(cleaned) == 11:
+            cleaned = cleaned[1:]
+        return cleaned
 
     @field_validator("customer_gst")
     @classmethod
     def check_customer_gst(cls, v: Optional[str]) -> Optional[str]:
-        return validate_gstin_format(v)
+        if not v or not str(v).strip():
+            return None
+        return str(v).strip().upper()
 
     @field_validator("ifsc_code")
     @classmethod
     def check_invoice_ifsc(cls, v: Optional[str]) -> Optional[str]:
-        return validate_ifsc_format(v)
+        if not v or not str(v).strip():
+            return None
+        return str(v).strip().upper()
 
     @model_validator(mode="before")
     @classmethod
@@ -244,17 +255,26 @@ class InvoiceUpdate(BaseModel):
     def check_customer_phone(cls, v: Optional[str]) -> Optional[str]:
         if not v or not str(v).strip():
             return None
-        return validate_mobile_format(v)
+        cleaned = re.sub(r"[\s\-\(\)]", "", str(v).strip())
+        if cleaned.startswith("+91"):
+            cleaned = cleaned[3:]
+        elif cleaned.startswith("0") and len(cleaned) == 11:
+            cleaned = cleaned[1:]
+        return cleaned
 
     @field_validator("customer_gst")
     @classmethod
     def check_customer_gst(cls, v: Optional[str]) -> Optional[str]:
-        return validate_gstin_format(v)
+        if not v or not str(v).strip():
+            return None
+        return str(v).strip().upper()
 
     @field_validator("ifsc_code")
     @classmethod
     def check_invoice_ifsc(cls, v: Optional[str]) -> Optional[str]:
-        return validate_ifsc_format(v)
+        if not v or not str(v).strip():
+            return None
+        return str(v).strip().upper()
 
     @model_validator(mode="before")
     @classmethod
@@ -418,34 +438,6 @@ class NotificationCreate(NotificationBase):
     pass
 
 class Notification(NotificationBase):
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
-
-    model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-    )
-
-class SalaryBase(BaseModel):
-    labour_id: str
-    labour_custom_id: Optional[str] = None
-    labour_name: str
-    work_type: Optional[str] = "Full Time"
-    month: int # 1 - 12
-    year: int  # e.g. 2026
-    salary_amount: float
-    status: str = "Pending" # "Paid" | "Pending"
-    payment_date: Optional[str] = None
-    payment_mode: Optional[str] = "Bank Transfer (NEFT)"
-    notes: Optional[str] = None
-
-class SalaryUpdate(BaseModel):
-    salary_amount: Optional[float] = None
-    status: Optional[str] = None
-    payment_date: Optional[str] = None
-    payment_mode: Optional[str] = None
-    notes: Optional[str] = None
-
-class Salary(SalaryBase):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
 
     model_config = ConfigDict(

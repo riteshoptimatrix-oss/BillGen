@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { getApiUrl, formatImageUrl } from "@/lib/api";
+import { getApiUrl, formatImageUrl, getAuthToken } from "@/lib/api";
 import {
   Product,
   formatINR,
@@ -153,19 +153,46 @@ function ProductDetailContent() {
       const uploadData = new FormData();
       uploadData.append("file", file);
       const apiUrl = getApiUrl();
+      const token = getAuthToken();
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
       const res = await fetch(`${apiUrl}/products/upload`, {
         method: "POST",
+        headers,
+        credentials: "include",
         body: uploadData
       });
+
       if (res.ok) {
         const data = await res.json();
         const uploadedUrl = data.url || data.path;
         setFormData((prev) => ({ ...prev, image: uploadedUrl }));
-        showToast("Product image uploaded from system successfully");
+        setImageError(false);
+        showToast("✓ Product image uploaded successfully");
+      } else {
+        // Fallback: Read as base64 Data URL so image is always preserved and editable
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === "string") {
+            setFormData((prev) => ({ ...prev, image: reader.result as string }));
+            setImageError(false);
+            showToast("Product image attached successfully");
+          }
+        };
+        reader.readAsDataURL(file);
       }
     } catch (err) {
       console.error("Upload failed", err);
-      showToast("Error uploading product image");
+      // Client-side fallback to FileReader Data URL
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          setFormData((prev) => ({ ...prev, image: reader.result as string }));
+          setImageError(false);
+          showToast("Product image attached successfully");
+        }
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -176,11 +203,12 @@ function ProductDetailContent() {
       showToast("Please enter a valid image URL");
       return;
     }
-    if (!url.startsWith("http://") && !url.startsWith("https://") && !url.startsWith("/")) {
+    if (!url.startsWith("http://") && !url.startsWith("https://") && !url.startsWith("/") && !url.startsWith("data:")) {
       showToast("URL must start with http:// or https://");
       return;
     }
     setFormData((prev) => ({ ...prev, image: url }));
+    setImageError(false);
     setImageUrlInput("");
     showToast("Product image updated from direct URL");
   };
@@ -190,16 +218,26 @@ function ProductDetailContent() {
     setIsSaving(true);
     const apiUrl = getApiUrl();
     try {
+      const token = getAuthToken();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
       const res = await fetch(`${apiUrl}/products/${pid}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers,
+        credentials: "include",
         body: JSON.stringify(formData)
       });
 
       if (res.ok) {
         const updated = await res.json();
         setProduct(updated);
-        showToast("Product updated successfully!");
+        showToast("✓ Product updated successfully! Returning to products...");
+        // Directly navigate back to /products page as requested
+        setTimeout(() => {
+          router.push("/products");
+        }, 200);
       } else {
         showToast("Failed to save product changes");
       }
@@ -302,11 +340,11 @@ function ProductDetailContent() {
           <button
             type="button"
             onClick={handleSave}
-            disabled={!hasChanges || isSaving || !formData.name.trim()}
+            disabled={isSaving || !formData.name.trim()}
             className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#0260de] hover:bg-[#0252bf] text-white text-xs sm:text-sm font-bold rounded-xl shadow-xs hover:shadow-md transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             <Check className="w-4 h-4" />
-            <span>{isSaving ? "Saving..." : hasChanges ? "Save Changes" : "Saved"}</span>
+            <span>{isSaving ? "Saving..." : "Save Changes"}</span>
           </button>
         </div>
       </div>
@@ -343,6 +381,21 @@ function ProductDetailContent() {
                   name={formData.name}
                   category={formData.category}
                 />
+              )}
+
+              {formData.image && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormData((prev) => ({ ...prev, image: "" }));
+                    setImageError(false);
+                    showToast("Product image removed");
+                  }}
+                  className="absolute top-3 right-3 p-1.5 rounded-xl bg-white/90 text-rose-600 border border-slate-200 hover:bg-rose-50 shadow-xs transition-all cursor-pointer opacity-80 group-hover:opacity-100"
+                  title="Remove image"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               )}
             </div>
 

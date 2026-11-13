@@ -618,10 +618,70 @@ export default function BillInvoicePage() {
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       const res = await fetch(`${apiUrl}/invoices/`, { headers, credentials: "include" });
       if (res.ok) {
-        setInvoices(await res.json());
+        const data = await res.json();
+        setInvoices(data);
+        return;
+      }
+      // Resilient fallback: If /invoices/ returns non-200, load from /finance/sales which reads the exact same collection
+      const salesRes = await fetch(`${apiUrl}/finance/sales`, { headers, credentials: "include" });
+      if (salesRes.ok) {
+        const salesData = await salesRes.json();
+        const mapped: Invoice[] = salesData.map((s: any) => ({
+          _id: s.id || s._id,
+          id: s.id || s._id,
+          invoice_number: s.invoice_number,
+          client: s.customer_name || s.client || "Unknown",
+          customer_phone: s.customer_phone || "",
+          customer_gst: s.customer_gst || "",
+          date: s.date || "",
+          due_date: s.due_date || "",
+          amount: Number(s.amount || 0),
+          amount_paid: Number(s.amount_paid || 0),
+          balance_due: Number(s.balance_due || 0),
+          paid_percentage: s.amount ? Math.round((Number(s.amount_paid || 0) / Number(s.amount)) * 100) : 0,
+          status: s.status || "Pending",
+          items: s.items || [],
+          notes: s.notes || "",
+          subtotal: s.subtotal,
+          discount_amount: s.discount_amount,
+          taxable_amount: s.taxable_amount,
+          tax_percent: s.tax_percent,
+          cgst_amount: s.cgst_amount,
+          sgst_amount: s.sgst_amount,
+          igst_amount: s.igst_amount
+        }));
+        setInvoices(mapped);
       }
     } catch (err) {
       console.error("Failed to fetch invoices:", err);
+      try {
+        const token = getAuthToken();
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+        const salesRes = await fetch(`${apiUrl}/finance/sales`, { headers, credentials: "include" });
+        if (salesRes.ok) {
+          const salesData = await salesRes.json();
+          const mapped: Invoice[] = salesData.map((s: any) => ({
+            _id: s.id || s._id,
+            id: s.id || s._id,
+            invoice_number: s.invoice_number,
+            client: s.customer_name || s.client || "Unknown",
+            customer_phone: s.customer_phone || "",
+            customer_gst: s.customer_gst || "",
+            date: s.date || "",
+            due_date: s.due_date || "",
+            amount: Number(s.amount || 0),
+            amount_paid: Number(s.amount_paid || 0),
+            balance_due: Number(s.balance_due || 0),
+            paid_percentage: s.amount ? Math.round((Number(s.amount_paid || 0) / Number(s.amount)) * 100) : 0,
+            status: s.status || "Pending",
+            items: s.items || [],
+            notes: s.notes || ""
+          }));
+          setInvoices(mapped);
+        }
+      } catch (fallbackErr) {
+        console.error("Finance sales fallback also failed:", fallbackErr);
+      }
     } finally {
       setIsLoading(false);
     }

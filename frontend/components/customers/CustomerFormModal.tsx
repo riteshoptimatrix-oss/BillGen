@@ -118,36 +118,17 @@ export default function CustomerFormModal({
       return;
     }
     
-    // Statutory Indian Mobile Validation (10 digits)
+    // Primary mobile validation
     const cleanMobile = formData.mobile_number.replace(/[\s\-\(\)]/g, "");
-    const mobilePattern = /^(?:\+91|0)?[6-9]\d{9}$/;
-    if (!cleanMobile || !mobilePattern.test(cleanMobile)) {
-      setErrorMessage("Please enter a valid 10-digit Indian mobile number (starting with 6-9).");
+    if (!cleanMobile) {
+      setErrorMessage("Primary contact number is required.");
       setActiveTab("profile");
       return;
     }
 
-    // Statutory Indian GSTIN Validation (15 alphanumeric characters)
-    if (formData.gst_number && formData.gst_number.trim()) {
-      const cleanGst = formData.gst_number.trim().toUpperCase();
-      const gstinPattern = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-      if (!gstinPattern.test(cleanGst)) {
-        setErrorMessage("Invalid GSTIN format. Expected 15 characters (e.g., 24AAAFO1234F1Z9).");
-        setActiveTab("profile");
-        return;
-      }
-    }
-
-    // Statutory Indian Bank IFSC Validation (11 characters)
-    if (formData.ifsc_code && formData.ifsc_code.trim()) {
-      const cleanIfsc = formData.ifsc_code.trim().toUpperCase();
-      const ifscPattern = /^[A-Z]{4}0[A-Z0-9]{6}$/;
-      if (!ifscPattern.test(cleanIfsc)) {
-        setErrorMessage("Invalid IFSC code format. Expected 11 characters (e.g. BARB0ODHAVA, 5th character must be '0').");
-        setActiveTab("banking");
-        return;
-      }
-    }
+    // Normalizing GSTIN and IFSC (permissive, no strict blocking)
+    const cleanGst = formData.gst_number ? formData.gst_number.trim().toUpperCase() : null;
+    const cleanIfsc = formData.ifsc_code ? formData.ifsc_code.trim().toUpperCase() : null;
 
     setIsSubmitting(true);
     setErrorMessage(null);
@@ -163,8 +144,8 @@ export default function CustomerFormModal({
       const payload = {
         ...formData,
         mobile_number: cleanMobile.startsWith("+91") ? cleanMobile.slice(3) : cleanMobile.startsWith("0") && cleanMobile.length === 11 ? cleanMobile.slice(1) : cleanMobile,
-        gst_number: formData.gst_number ? formData.gst_number.trim().toUpperCase() : null,
-        ifsc_code: formData.ifsc_code ? formData.ifsc_code.trim().toUpperCase() : null,
+        gst_number: cleanGst,
+        ifsc_code: cleanIfsc,
         account_holder_name: formData.account_holder_name || formData.name
       };
 
@@ -567,32 +548,32 @@ export default function CustomerFormModal({
                 </button>
               )}
 
-              {activeTab !== "banking" ? (
+              {activeTab !== "banking" && (
                 <button
                   type="button"
                   onClick={() =>
                     setActiveTab(activeTab === "profile" ? "addresses" : "banking")
                   }
-                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-colors cursor-pointer"
                 >
                   Next Section →
                 </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-[#0260de] hover:bg-[#0252bf] text-white text-xs font-bold shadow-xs hover:shadow-md transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
-                >
-                  <Check className="w-4 h-4 stroke-[2.5]" />
-                  <span>
-                    {isSubmitting
-                      ? "Saving..."
-                      : isEditing
-                      ? "Update Customer"
-                      : "Create Customer"}
-                  </span>
-                </button>
               )}
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-[#0260de] hover:bg-[#0252bf] text-white text-xs font-bold shadow-xs hover:shadow-md transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
+              >
+                <Check className="w-4 h-4 stroke-[2.5]" />
+                <span>
+                  {isSubmitting
+                    ? "Saving..."
+                    : isEditing
+                    ? "Update Customer"
+                    : "Create Customer"}
+                </span>
+              </button>
             </div>
           </div>
         </form>
