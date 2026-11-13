@@ -186,3 +186,24 @@ async def get_dashboard_summary(
         "systemAlerts": system_alerts,
         "recentInvoices": recent_invoices
     }
+
+@router.post("/reset-dummy-data", response_description="Reset dummy labours, expenses, purchases, and invoices")
+async def reset_dummy_data(
+    request: Request,
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
+) -> Dict[str, Any]:
+    db = request.app.mongodb
+    del_labours = await db["labours"].delete_many({})
+    del_expenses = await db["expenses"].delete_many({})
+    del_purchases = await db["purchases"].delete_many({})
+    del_invoices = await db["invoices"].delete_many({})
+    return {
+        "success": True,
+        "message": "All dummy financial records cleared successfully.",
+        "deleted": {
+            "labours": del_labours.deleted_count,
+            "expenses": del_expenses.deleted_count,
+            "purchases": del_purchases.deleted_count,
+            "invoices": del_invoices.deleted_count,
+        }
+    }
