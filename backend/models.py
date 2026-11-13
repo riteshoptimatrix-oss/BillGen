@@ -1,9 +1,46 @@
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+import re
+from pydantic import BaseModel, Field, ConfigDict, model_validator, field_validator
 from typing import Optional, Annotated, List, Dict, Any
 from pydantic.functional_validators import BeforeValidator
 
 # Helper for MongoDB ObjectId
 PyObjectId = Annotated[str, BeforeValidator(str)]
+
+# Indian Statutory Regulatory RegEx Patterns
+GSTIN_REGEX = re.compile(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$")
+MOBILE_REGEX = re.compile(r"^(?:\+91|0)?[6-9]\d{9}$")
+IFSC_REGEX = re.compile(r"^[A-Z]{4}0[A-Z0-9]{6}$")
+
+def validate_gstin_format(val: Optional[str]) -> Optional[str]:
+    """Validate and normalize 15-character Indian Goods & Services Tax (GSTIN)."""
+    if not val or not str(val).strip():
+        return None
+    cleaned = str(val).strip().upper()
+    if not GSTIN_REGEX.match(cleaned):
+        raise ValueError(f"Invalid GSTIN format '{cleaned}'. Must be 15 alphanumeric characters (e.g., 24AAAFO1234F1Z9).")
+    return cleaned
+
+def validate_mobile_format(val: Optional[str]) -> str:
+    """Validate and normalize 10-digit Indian Mobile phone numbers."""
+    if not val or not str(val).strip():
+        raise ValueError("Mobile phone number is required.")
+    cleaned = re.sub(r"[\s\-\(\)]", "", str(val).strip())
+    if not MOBILE_REGEX.match(cleaned):
+        raise ValueError(f"Invalid Indian mobile number '{val}'. Must be 10 digits starting with 6, 7, 8, or 9.")
+    if cleaned.startswith("+91"):
+        cleaned = cleaned[3:]
+    elif cleaned.startswith("0") and len(cleaned) == 11:
+        cleaned = cleaned[1:]
+    return cleaned
+
+def validate_ifsc_format(val: Optional[str]) -> Optional[str]:
+    """Validate and normalize 11-character Indian Financial System Code (IFSC)."""
+    if not val or not str(val).strip():
+        return None
+    cleaned = str(val).strip().upper()
+    if not IFSC_REGEX.match(cleaned):
+        raise ValueError(f"Invalid IFSC code '{cleaned}'. Expected 11 characters (e.g. BARB0ODHAVA, 5th character must be '0').")
+    return cleaned
 
 class ProductBase(BaseModel):
     name: str
@@ -50,6 +87,11 @@ class LabourBase(BaseModel):
     work_type: Optional[str] = "Full Time"
     joining_date: Optional[str] = None
 
+    @field_validator("mobile_number")
+    @classmethod
+    def check_mobile(cls, v: str) -> str:
+        return validate_mobile_format(v)
+
 class LabourCreate(LabourBase):
     pass
 
@@ -72,6 +114,12 @@ class Labour(LabourBase):
         populate_by_name=True,
         arbitrary_types_allowed=True,
     )
+
+class PaymentTransactionCreate(BaseModel):
+    amount: float
+    date: Optional[str] = None
+    mode: Optional[str] = "Bank Transfer"
+    reference_note: Optional[str] = None
 
 class InvoiceItem(BaseModel):
     description: str
@@ -105,7 +153,9 @@ class InvoiceBase(BaseModel):
     amount: float # Grand Total
     amount_paid: Optional[float] = 0.0
     balance_due: Optional[float] = 0.0
-    status: str = "Pending" # "Paid", "Pending", "Overdue"
+    paid_percentage: Optional[float] = 0.0
+    payments: Optional[List[Dict[str, Any]]] = None
+    status: str = "Pending" # "Paid", "Pending", "Partially Paid", "Overdue"
     
     # Customer Bank Details
     bank_name: Optional[str] = None
@@ -116,6 +166,23 @@ class InvoiceBase(BaseModel):
     account_type: Optional[str] = None
     
     notes: Optional[str] = None
+
+    @field_validator("customer_phone")
+    @classmethod
+    def check_customer_phone(cls, v: Optional[str]) -> Optional[str]:
+        if not v or not str(v).strip():
+            return None
+        return validate_mobile_format(v)
+
+    @field_validator("customer_gst")
+    @classmethod
+    def check_customer_gst(cls, v: Optional[str]) -> Optional[str]:
+        return validate_gstin_format(v)
+
+    @field_validator("ifsc_code")
+    @classmethod
+    def check_invoice_ifsc(cls, v: Optional[str]) -> Optional[str]:
+        return validate_ifsc_format(v)
 
     @model_validator(mode="before")
     @classmethod
@@ -161,6 +228,8 @@ class InvoiceUpdate(BaseModel):
     amount: Optional[float] = None
     amount_paid: Optional[float] = None
     balance_due: Optional[float] = None
+    paid_percentage: Optional[float] = None
+    payments: Optional[List[Dict[str, Any]]] = None
     status: Optional[str] = None
     bank_name: Optional[str] = None
     account_holder_name: Optional[str] = None
@@ -169,6 +238,23 @@ class InvoiceUpdate(BaseModel):
     branch_name: Optional[str] = None
     account_type: Optional[str] = None
     notes: Optional[str] = None
+
+    @field_validator("customer_phone")
+    @classmethod
+    def check_customer_phone(cls, v: Optional[str]) -> Optional[str]:
+        if not v or not str(v).strip():
+            return None
+        return validate_mobile_format(v)
+
+    @field_validator("customer_gst")
+    @classmethod
+    def check_customer_gst(cls, v: Optional[str]) -> Optional[str]:
+        return validate_gstin_format(v)
+
+    @field_validator("ifsc_code")
+    @classmethod
+    def check_invoice_ifsc(cls, v: Optional[str]) -> Optional[str]:
+        return validate_ifsc_format(v)
 
     @model_validator(mode="before")
     @classmethod
@@ -280,6 +366,21 @@ class CustomerBase(BaseModel):
     branch_name: Optional[str] = None
     account_type: Optional[str] = None
 
+    @field_validator("mobile_number")
+    @classmethod
+    def check_customer_mobile(cls, v: str) -> str:
+        return validate_mobile_format(v)
+
+    @field_validator("gst_number")
+    @classmethod
+    def check_customer_gst(cls, v: Optional[str]) -> Optional[str]:
+        return validate_gstin_format(v)
+
+    @field_validator("ifsc_code")
+    @classmethod
+    def check_customer_ifsc(cls, v: Optional[str]) -> Optional[str]:
+        return validate_ifsc_format(v)
+
 class CustomerCreate(CustomerBase):
     pass
 
@@ -317,6 +418,62 @@ class NotificationCreate(NotificationBase):
     pass
 
 class Notification(NotificationBase):
+    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+    )
+
+class SalaryBase(BaseModel):
+    labour_id: str
+    labour_custom_id: Optional[str] = None
+    labour_name: str
+    work_type: Optional[str] = "Full Time"
+    month: int # 1 - 12
+    year: int  # e.g. 2026
+    salary_amount: float
+    status: str = "Pending" # "Paid" | "Pending"
+    payment_date: Optional[str] = None
+    payment_mode: Optional[str] = "Bank Transfer (NEFT)"
+    notes: Optional[str] = None
+
+class SalaryUpdate(BaseModel):
+    salary_amount: Optional[float] = None
+    status: Optional[str] = None
+    payment_date: Optional[str] = None
+    payment_mode: Optional[str] = None
+    notes: Optional[str] = None
+
+class Salary(SalaryBase):
+    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+    )
+
+class SalaryBase(BaseModel):
+    labour_id: str
+    labour_custom_id: Optional[str] = None
+    labour_name: str
+    work_type: Optional[str] = "Full Time"
+    month: int # 1 - 12
+    year: int  # e.g. 2026
+    salary_amount: float
+    status: str = "Pending" # "Paid" | "Pending"
+    payment_date: Optional[str] = None
+    payment_mode: Optional[str] = "Bank Transfer (NEFT)"
+    notes: Optional[str] = None
+
+class SalaryUpdate(BaseModel):
+    salary_amount: Optional[float] = None
+    status: Optional[str] = None
+    payment_date: Optional[str] = None
+    payment_mode: Optional[str] = None
+    notes: Optional[str] = None
+
+class Salary(SalaryBase):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
 
     model_config = ConfigDict(

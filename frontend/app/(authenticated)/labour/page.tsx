@@ -17,9 +17,28 @@ import LabourFormModal from "@/components/labour/LabourFormModal";
 import LabourImportModal from "@/components/labour/LabourImportModal";
 import LabourEmptyState from "@/components/labour/LabourEmptyState";
 import LabourSkeleton from "@/components/labour/LabourSkeleton";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import SalaryModule from "@/components/labour/SalaryModule";
+import { ChevronLeft, ChevronRight, Users, IndianRupee } from "lucide-react";
 
 export default function LabourManagementPage() {
+  const [activeModuleTab, setActiveModuleTab] = useState<"directory" | "salary">("directory");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("tab") === "salary") {
+        setActiveModuleTab("salary");
+      }
+    }
+  }, []);
+
+  const handleTabSwitch = (tab: "directory" | "salary") => {
+    setActiveModuleTab(tab);
+    if (typeof window !== "undefined") {
+      const url = tab === "salary" ? "?tab=salary" : window.location.pathname;
+      window.history.replaceState(null, "", url);
+    }
+  };
   const [labours, setLabours] = useState<Labour[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -342,124 +361,165 @@ export default function LabourManagementPage() {
         </div>
       )}
 
-      {/* 1. PAGE HEADER */}
-      <LabourHeader
-        onAddNew={handleAddNewLabour}
-        onImport={() => setIsImportModalOpen(true)}
-        onExport={handleExportCsv}
-        totalCount={labours.length}
-      />
+      {/* MODULE TAB SWITCHER: Workforce Directory vs Salary Module */}
+      <div className="flex items-center gap-2 p-1.5 bg-white border border-slate-200/90 rounded-2xl shadow-xs w-full sm:w-fit">
+        <button
+          type="button"
+          onClick={() => handleTabSwitch("directory")}
+          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+            activeModuleTab === "directory"
+              ? "bg-[#0260de] text-white shadow-xs"
+              : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>Workforce Directory</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${activeModuleTab === "directory" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"}`}>
+            {labours.length}
+          </span>
+        </button>
 
-      {/* 2. COMPACT HORIZONTAL STATISTICS */}
-      <LabourStatistics
-        counts={staffCounts}
-        activeFilter={filters.statusFilter}
-        onFilterChange={(filter: LabourStatusFilter) =>
-          handleFilterUpdate({ statusFilter: filter })
-        }
-      />
+        <button
+          type="button"
+          onClick={() => handleTabSwitch("salary")}
+          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+            activeModuleTab === "salary"
+              ? "bg-[#0260de] text-white shadow-xs"
+              : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+          }`}
+        >
+          <IndianRupee className="w-4 h-4" />
+          <span>Salary Module</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${activeModuleTab === "salary" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"}`}>
+            Monthly Ledger
+          </span>
+        </button>
+      </div>
 
-      {/* 3. FILTERING & SEARCH TOOLBAR */}
-      <LabourToolbar
-        filters={filters}
-        onFilterChange={handleFilterUpdate}
-        onResetFilters={handleResetFilters}
-        totalFiltered={filteredLabours.length}
-        totalLabours={labours.length}
-      />
-
-      {/* 4. LABOUR CATALOG GRID / LIST OR STATES */}
-      {isLoading ? (
-        <LabourSkeleton viewMode={filters.viewMode} count={8} />
-      ) : labours.length === 0 ? (
-        <LabourEmptyState
-          isFiltering={false}
-          onResetFilters={handleResetFilters}
-          onAddNew={handleAddNewLabour}
-        />
-      ) : filteredLabours.length === 0 ? (
-        <LabourEmptyState
-          isFiltering={true}
-          onResetFilters={handleResetFilters}
-          onAddNew={handleAddNewLabour}
-        />
+      {activeModuleTab === "salary" ? (
+        <SalaryModule />
       ) : (
-        <div className="space-y-6">
-          <LabourGrid
-            labours={paginatedLabours}
-            viewMode={filters.viewMode}
-            onQuickView={handleOpenQuickView}
-            onEdit={handleEditLabour}
-            onDelete={handleDeleteLabour}
+        <>
+          {/* 1. PAGE HEADER */}
+          <LabourHeader
+            onAddNew={handleAddNewLabour}
+            onImport={() => setIsImportModalOpen(true)}
+            onExport={handleExportCsv}
+            totalCount={labours.length}
           />
 
-          {/* 5. PAGINATION BAR (When staff exceed itemsPerPage) */}
-          {totalPages > 1 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-200/90 text-xs text-slate-500">
-              <span>
-                Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
-                {Math.min(currentPage * itemsPerPage, filteredLabours.length)} of{" "}
-                {filteredLabours.length} staff members
-              </span>
+          {/* 2. COMPACT HORIZONTAL STATISTICS */}
+          <LabourStatistics
+            counts={staffCounts}
+            activeFilter={filters.statusFilter}
+            onFilterChange={(filter: LabourStatusFilter) =>
+              handleFilterUpdate({ statusFilter: filter })
+            }
+          />
 
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  aria-label="Previous page"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
+          {/* 3. FILTERING & SEARCH TOOLBAR */}
+          <LabourToolbar
+            filters={filters}
+            onFilterChange={handleFilterUpdate}
+            onResetFilters={handleResetFilters}
+            totalFiltered={filteredLabours.length}
+            totalLabours={labours.length}
+          />
 
-                <div className="flex items-center gap-1 px-1">
-                  {Array.from({ length: totalPages }).map((_, i) => {
-                    const pageNum = i + 1;
-                    if (
-                      pageNum === 1 ||
-                      pageNum === totalPages ||
-                      (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
-                    ) {
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => setCurrentPage(pageNum)}
-                          className={`w-7 h-7 rounded-lg font-semibold text-xs transition-colors ${
-                            currentPage === pageNum
-                              ? "bg-blue-600 text-white shadow-xs"
-                              : "text-slate-600 hover:bg-slate-100 border border-transparent"
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      );
-                    }
-                    if (
-                      (pageNum === 2 && currentPage > 3) ||
-                      (pageNum === totalPages - 1 && currentPage < totalPages - 2)
-                    ) {
-                      return (
-                        <span key={pageNum} className="px-1 text-slate-400">
-                          …
-                        </span>
-                      );
-                    }
-                    return null;
-                  })}
+          {/* 4. LABOUR CATALOG GRID / LIST OR STATES */}
+          {isLoading ? (
+            <LabourSkeleton viewMode={filters.viewMode} count={8} />
+          ) : labours.length === 0 ? (
+            <LabourEmptyState
+              isFiltering={false}
+              onResetFilters={handleResetFilters}
+              onAddNew={handleAddNewLabour}
+            />
+          ) : filteredLabours.length === 0 ? (
+            <LabourEmptyState
+              isFiltering={true}
+              onResetFilters={handleResetFilters}
+              onAddNew={handleAddNewLabour}
+            />
+          ) : (
+            <div className="space-y-6">
+              <LabourGrid
+                labours={paginatedLabours}
+                viewMode={filters.viewMode}
+                onQuickView={handleOpenQuickView}
+                onEdit={handleEditLabour}
+                onDelete={handleDeleteLabour}
+              />
+
+              {/* 5. PAGINATION BAR (When staff exceed itemsPerPage) */}
+              {totalPages > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-200/90 text-xs text-slate-500">
+                  <span>
+                    Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
+                    {Math.min(currentPage * itemsPerPage, filteredLabours.length)} of{" "}
+                    {filteredLabours.length} staff members
+                  </span>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                      disabled={currentPage === 1}
+                      className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Previous page"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+
+                    <div className="flex items-center gap-1 px-1">
+                      {Array.from({ length: totalPages }).map((_, i) => {
+                        const pageNum = i + 1;
+                        if (
+                          pageNum === 1 ||
+                          pageNum === totalPages ||
+                          (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+                        ) {
+                          return (
+                            <button
+                              key={pageNum}
+                              onClick={() => setCurrentPage(pageNum)}
+                              className={`w-7 h-7 rounded-lg font-semibold text-xs transition-colors ${
+                                currentPage === pageNum
+                                  ? "bg-blue-600 text-white shadow-xs"
+                                  : "text-slate-600 hover:bg-slate-100 border border-transparent"
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        }
+                        if (
+                          (pageNum === 2 && currentPage > 3) ||
+                          (pageNum === totalPages - 1 && currentPage < totalPages - 2)
+                        ) {
+                          return (
+                            <span key={pageNum} className="px-1 text-slate-400">
+                              …
+                            </span>
+                          );
+                        }
+                        return null;
+                      })}
+                    </div>
+
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                      className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Next page"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-
-                <button
-                  onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                  className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  aria-label="Next page"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
+              )}
             </div>
           )}
-        </div>
+        </>
       )}
 
       {/* QUICK VIEW DRAWER */}
@@ -473,6 +533,11 @@ export default function LabourManagementPage() {
         }}
         onDelete={(labour) => {
           handleDeleteLabour(labour);
+        }}
+        onLabourUpdated={(updated) => {
+          setLabours((prev) => prev.map((l) => (l._id === updated._id ? updated : l)));
+          setQuickViewLabour(updated);
+          showToast(`✓ Aadhaar card updated for ${updated.name}`);
         }}
       />
 

@@ -33,7 +33,8 @@ from routers import (
     purchases,
     finance,
     reports,
-    notifications
+    notifications,
+    settings
 )
 
 # Load environment configuration
@@ -244,6 +245,7 @@ app.include_router(purchases.router)
 app.include_router(finance.router)
 app.include_router(reports.router)
 app.include_router(notifications.router)
+app.include_router(settings.router)
 
 # ==============================================================================
 # 5. AUTHENTICATION SCHEMAS & ENDPOINTS
@@ -317,12 +319,14 @@ async def login(credentials: LoginRequest, request: Request, response: Response)
     })
     
     # 4. Set HttpOnly cookie for defense-in-depth against XSS token harvesting
+    # Automatically harden for HTTPS production (Netlify / Render cross-origin)
+    is_production = os.getenv("ENVIRONMENT", "development").lower() in ["production", "prod"] or os.getenv("RENDER") is not None
     response.set_cookie(
         key="access_token",
         value=token,
         httponly=True,
-        samesite="lax",
-        secure=False,  # Set to True when hosted behind production HTTPS
+        samesite="none" if is_production else "lax",
+        secure=True if is_production else False,
         max_age=86400  # 24 hours
     )
     
@@ -343,8 +347,13 @@ async def get_current_user_profile(user: Dict[str, Any] = Depends(get_current_us
 
 @app.post("/api/auth/logout", tags=["auth"])
 async def logout(response: Response):
-    """Clear session authentication cookies."""
-    response.delete_cookie(key="access_token")
+    """Clear session authentication cookies with production-aware flags."""
+    is_production = os.getenv("ENVIRONMENT", "development").lower() in ["production", "prod"] or os.getenv("RENDER") is not None
+    response.delete_cookie(
+        key="access_token",
+        samesite="none" if is_production else "lax",
+        secure=True if is_production else False
+    )
     return {"status": "success", "message": "Logged out successfully."}
 
 # ==============================================================================

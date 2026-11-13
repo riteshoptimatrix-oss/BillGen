@@ -82,17 +82,21 @@ async def get_dashboard_summary(
         if inv_date[:7] == current_month_str:
             month_sales += amt
 
-        if status == "Paid":
-            total_revenue += amt
-        else:
+        # Support manual partial payment tracking accurately
+        amt_paid = float(inv.get("amount_paid", amt if status == "Paid" else 0.0))
+        bal_due = float(inv.get("balance_due", 0.0 if status == "Paid" else (amt - amt_paid)))
+
+        total_revenue += amt_paid
+
+        if bal_due > 0:
             pending_bills += 1
-            pending_amount += amt
+            pending_amount += bal_due
             if status == "Overdue":
                 system_alerts.append({
                     "id": f"inv-{inv['_id']}",
                     "type": "overdue",
                     "title": f"Invoice: {inv.get('client', 'Unknown')}",
-                    "subtitle": f"₹{amt:,.0f} is Overdue",
+                    "subtitle": f"₹{bal_due:,.0f} is Overdue",
                     "actionText": "Send Reminder"
                 })
 
@@ -148,11 +152,11 @@ async def get_dashboard_summary(
     for m_idx in range(1, 13):
         m_str = f"{current_year}-{m_idx:02d}"
         
-        # Month revenue
+        # Month revenue (collected payments)
         m_rev = sum(
-            float(inv.get("amount", 0.0))
+            float(inv.get("amount_paid", inv.get("amount", 0.0) if inv.get("status") == "Paid" else 0.0))
             for inv in invoices
-            if inv.get("status") == "Paid" and str(inv.get("date", ""))[:7] == m_str
+            if str(inv.get("date", ""))[:7] == m_str
         )
         
         # Month expenses (direct expenses + purchases)

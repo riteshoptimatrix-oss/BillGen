@@ -5,8 +5,9 @@ import base64
 import aiofiles
 from fastapi import APIRouter, Body, Request, HTTPException, status, UploadFile, File, Form, Depends
 from fastapi.responses import JSONResponse
+import uuid
 from typing import List, Dict, Any, Optional
-from models import Invoice, InvoiceCreate, InvoiceUpdate
+from models import Invoice, InvoiceCreate, InvoiceUpdate, PaymentTransactionCreate
 from bson import ObjectId
 from datetime import datetime
 
@@ -219,6 +220,24 @@ async def list_invoices(
             hex_suffix = str(inv["_id"])[-4:].upper()
             inv["invoice_number"] = f"INV-{current_year}-{hex_suffix}"
             
+        tot = float(inv.get("amount", 0.0))
+        paid = float(inv.get("amount_paid", 0.0))
+        # If amount_paid is 0 but status was marked Paid, infer full payment
+        if paid == 0.0 and inv.get("status") == "Paid" and tot > 0:
+            paid = tot
+            inv["amount_paid"] = paid
+
+        bal = max(0.0, round(tot - paid, 2))
+        pct = round((paid / tot * 100), 1) if tot > 0 else (100.0 if paid > 0 else 0.0)
+        inv["balance_due"] = bal
+        inv["paid_percentage"] = pct
+
+        # Dynamic Status Assignment
+        if bal <= 0 and paid > 0:
+            inv["status"] = "Paid"
+        elif paid > 0 and bal > 0:
+            inv["status"] = "Partially Paid"
+
     return invoices
 
 @router.get("/{id}", response_description="Get a single invoice", response_model=Invoice)
@@ -232,6 +251,23 @@ async def show_invoice(
     if (invoice := await request.app.mongodb["invoices"].find_one({"_id": ObjectId(id)}, {"pdf_base64": 0})) is not None:
         if not invoice.get("invoice_number"):
             invoice["invoice_number"] = f"INV-{datetime.now().year}-{str(invoice['_id'])[-4:].upper()}"
+        
+        tot = float(invoice.get("amount", 0.0))
+        paid = float(invoice.get("amount_paid", 0.0))
+        if paid == 0.0 and invoice.get("status") == "Paid" and tot > 0:
+            paid = tot
+            invoice["amount_paid"] = paid
+
+        bal = max(0.0, round(tot - paid, 2))
+        pct = round((paid / tot * 100), 1) if tot > 0 else (100.0 if paid > 0 else 0.0)
+        invoice["balance_due"] = bal
+        invoice["paid_percentage"] = pct
+
+        if bal <= 0 and paid > 0:
+            invoice["status"] = "Paid"
+        elif paid > 0 and bal > 0:
+            invoice["status"] = "Partially Paid"
+
         return invoice
     raise HTTPException(status_code=404, detail=f"Invoice {id} not found")
 
@@ -293,6 +329,11 @@ async def delete_invoice(
                         {"_id": ObjectId(prod_id)},
                         {"$inc": {"stock": qty}}
                     )
+                elif item.get("description"):
+                    await request.app.mongodb["products"].update_one(
+                        {"name": item.get("description")},
+                        {"$inc": {"stock": qty}}
+                    )
 
     delete_result = await request.app.mongodb["invoices"].delete_one({"_id": ObjectId(id)})
 
@@ -301,4 +342,156 @@ async def delete_invoice(
 
     raise HTTPException(status_code=404, detail=f"Invoice {id} not found")
 
-    raise HTTPException(status_code=404, detail=f"Invoice {id} not found")
+# ==============================================================================
+# MANUAL PARTIAL PAYMENT MANAGEMENT
+# ==============================================================================
+
+@router.post("/{id}/payments", response_description="Record a manual partial or full payment against an invoice")
+async def record_invoice_payment(
+    id: str,
+    request: Request,
+    payment: PaymentTransactionCreate = Body(...),
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
+) -> Dict[str, Any]:
+    if not ObjectId.is_valid(id):
+        raise HTTPException(status_code=400, detail="Invalid Invoice ID format")
+    
+    db = request.app.mongodb
+    invoice = await db["invoices"].find_one({"_id": ObjectId(id)}, {"pdf_base64": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+        
+    invoice_total = float(invoice.get("amount", 0.0))
+    current_paid = float(invoice.get("amount_paid", 0.0))
+    remaining_balance = max(0.0, round(invoice_total - current_paid, 2))
+
+    payment_amt = round(float(payment.amount), 2)
+    if payment_amt <= 0:
+        raise HTTPException(status_code=400, detail="Payment amount must be greater than zero.")
+
+    if payment_amt > remaining_balance:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Payment amount ₹{payment_amt:,.2f} exceeds remaining balance ₹{remaining_balance:,.2f}."
+        )
+
+    now = datetime.now()
+    pay_doc = {
+        "id": f"PAY-{uuid.uuid4().hex[:8].upper()}",
+        "amount": payment_amt,
+        "date": payment.date or now.strftime("%Y-%m-%d"),
+        "mode": payment.mode or "Bank Transfer",
+        "reference_note": payment.reference_note or "",
+        "created_at": now.isoformat()
+    }
+
+    new_paid = round(current_paid + payment_amt, 2)
+    new_balance = max(0.0, round(invoice_total - new_paid, 2))
+    new_pct = round((new_paid / invoice_total * 100), 1) if invoice_total > 0 else 100.0
+
+    if new_balance <= 0 or new_pct >= 100.0:
+        new_status = "Paid"
+    elif new_paid > 0:
+        new_status = "Partially Paid"
+    else:
+        new_status = "Pending"
+
+    await db["invoices"].update_one(
+        {"_id": ObjectId(id)},
+        {
+            "$push": {"payments": pay_doc},
+            "$set": {
+                "amount_paid": new_paid,
+                "balance_due": new_balance,
+                "paid_percentage": new_pct,
+                "status": new_status,
+                "updated_at": now.isoformat()
+            }
+        }
+    )
+
+    updated_invoice = await db["invoices"].find_one({"_id": ObjectId(id)}, {"pdf_base64": 0})
+    updated_invoice["_id"] = str(updated_invoice["_id"])
+    updated_invoice["id"] = updated_invoice["_id"]
+    updated_invoice["paid_percentage"] = new_pct
+
+    # Real-Time Broadcast Notification
+    try:
+        from routers.notifications import broadcast_notification
+        inv_num = updated_invoice.get("invoice_number", f"INV-{id[-4:].upper()}")
+        client_name = updated_invoice.get("client", "Customer")
+        await broadcast_notification(
+            db,
+            title=f"Payment Received: {inv_num}",
+            message=f"Received ₹{payment_amt:,.2f} ({new_pct}% Paid) from {client_name}",
+            type="payment",
+            link="/bill-invoice"
+        )
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "message": f"Payment of ₹{payment_amt:,.2f} recorded successfully ({new_pct}% completed).",
+        "invoice": updated_invoice
+    }
+
+@router.delete("/{id}/payments/{payment_id}", response_description="Delete/revert a recorded payment")
+async def delete_invoice_payment(
+    id: str,
+    payment_id: str,
+    request: Request,
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
+) -> Dict[str, Any]:
+    if not ObjectId.is_valid(id):
+        raise HTTPException(status_code=400, detail="Invalid Invoice ID format")
+    
+    db = request.app.mongodb
+    invoice = await db["invoices"].find_one({"_id": ObjectId(id)}, {"pdf_base64": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    existing_payments = invoice.get("payments", [])
+    filtered_payments = [p for p in existing_payments if p.get("id") != payment_id]
+
+    if len(filtered_payments) == len(existing_payments):
+        raise HTTPException(status_code=404, detail="Payment transaction not found")
+
+    invoice_total = float(invoice.get("amount", 0.0))
+    new_paid = round(sum(float(p.get("amount", 0.0)) for p in filtered_payments), 2)
+    new_balance = max(0.0, round(invoice_total - new_paid, 2))
+    new_pct = round((new_paid / invoice_total * 100), 1) if invoice_total > 0 else 0.0
+
+    if new_balance <= 0 and new_paid > 0:
+        new_status = "Paid"
+    elif new_paid > 0:
+        new_status = "Partially Paid"
+    else:
+        new_status = "Pending"
+
+    now = datetime.now()
+    await db["invoices"].update_one(
+        {"_id": ObjectId(id)},
+        {
+            "$set": {
+                "payments": filtered_payments,
+                "amount_paid": new_paid,
+                "balance_due": new_balance,
+                "paid_percentage": new_pct,
+                "status": new_status,
+                "updated_at": now.isoformat()
+            }
+        }
+    )
+
+    updated_invoice = await db["invoices"].find_one({"_id": ObjectId(id)}, {"pdf_base64": 0})
+    updated_invoice["_id"] = str(updated_invoice["_id"])
+    updated_invoice["id"] = updated_invoice["_id"]
+    updated_invoice["paid_percentage"] = new_pct
+
+    return {
+        "success": True,
+        "message": "Payment transaction reverted successfully.",
+        "invoice": updated_invoice
+    }
+

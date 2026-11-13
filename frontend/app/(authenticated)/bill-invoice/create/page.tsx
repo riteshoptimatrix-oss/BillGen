@@ -181,10 +181,11 @@ export default function CreateInvoicePage() {
       try {
         const token = getAuthToken();
         const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-        const [cRes, pRes, numRes] = await Promise.all([
+        const [cRes, pRes, numRes, settingsRes] = await Promise.all([
           fetch(`${apiUrl}/customers/`, { headers, credentials: "include" }),
           fetch(`${apiUrl}/products/`, { headers, credentials: "include" }),
-          fetch(`${apiUrl}/invoices/next-number`, { headers, credentials: "include" })
+          fetch(`${apiUrl}/invoices/next-number`, { headers, credentials: "include" }),
+          fetch(`${apiUrl}/settings`, { headers, credentials: "include" })
         ]);
 
         if (cRes.ok) {
@@ -203,6 +204,26 @@ export default function CreateInvoicePage() {
         if (numRes.ok) {
           const numData = await numRes.json();
           setInvoiceNumber(numData.next_number || `INV-${new Date().getFullYear()}-0001`);
+        }
+
+        if (settingsRes.ok) {
+          const sData = await settingsRes.json();
+          if (sData.bank) {
+            if (sData.bank.bankName) setBankName(sData.bank.bankName);
+            if (sData.bank.accountNumber) setAccountNumber(sData.bank.accountNumber);
+            if (sData.bank.ifscCode) setRefIfsc(sData.bank.ifscCode);
+            if (sData.bank.branchName) setBranchName(sData.bank.branchName);
+            if (sData.bank.accountHolder) setAccountHolder(sData.bank.accountHolder);
+            if (sData.bank.accountType) setAccountType(sData.bank.accountType);
+          }
+          if (sData.invoice) {
+            if (sData.invoice.defaultTerms) setPaymentTerms(sData.invoice.defaultTerms);
+            if (sData.invoice.defaultPaymentMethod) setPaymentMethod(sData.invoice.defaultPaymentMethod);
+            if (sData.invoice.notes) setTermsText(sData.invoice.notes);
+          }
+          if (sData.tax && sData.tax.defaultTaxRate !== undefined) {
+            setTaxRate(sData.tax.defaultTaxRate);
+          }
         }
       } catch (err) {
         console.error("Failed to load initial data", err);
@@ -419,13 +440,28 @@ export default function CreateInvoicePage() {
       return;
     }
 
+    // Statutory Indian Mobile Validation (if entered)
+    const rawDigits = clientPhone.replace(/[\s\-\(\)]/g, "");
+    const cleanPhone = rawDigits.startsWith("+91") ? rawDigits.slice(3) : rawDigits.startsWith("0") && rawDigits.length === 11 ? rawDigits.slice(1) : rawDigits;
+    if (cleanPhone && !/^[6-9]\d{9}$/.test(cleanPhone)) {
+      alert("Please enter a valid 10-digit Indian mobile number for the customer (e.g., 9825014829).");
+      return;
+    }
+
+    // Statutory Indian GSTIN Validation (if entered)
+    const cleanGst = clientGst.trim().toUpperCase();
+    if (cleanGst && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(cleanGst)) {
+      alert("Invalid customer GSTIN format. Expected 15 characters (e.g. 24AAAFO1234F1Z9).");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const payload = {
         invoice_number: invoiceNumber.trim(),
         client: clientName.trim(),
-        customer_phone: clientPhone.trim() || undefined,
-        customer_gst: clientGst.trim() || undefined,
+        customer_phone: cleanPhone || undefined,
+        customer_gst: cleanGst || undefined,
         customer_address: clientAddress.trim() || undefined,
 
         date: invoiceDate,

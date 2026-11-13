@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { getApiUrl, getAuthToken } from "@/lib/api";
 import {
   Building2,
   FileSpreadsheet,
@@ -92,8 +93,9 @@ export default function SettingsPage() {
   // 5. User Account & Security
   const [securitySettings, setSecuritySettings] = useState(DEFAULT_SECURITY_SETTINGS);
 
-  // Load persisted settings on mount
+  // Load persisted settings on mount (from Database with localStorage fallback)
   useEffect(() => {
+    // 1. Initial fast load from local cache
     try {
       const savedCompany = localStorage.getItem("sve_company_settings");
       if (savedCompany) setCompanySettings(JSON.parse(savedCompany));
@@ -106,20 +108,42 @@ export default function SettingsPage() {
 
       const savedBank = localStorage.getItem("sve_bank_settings");
       if (savedBank) setBankSettings(JSON.parse(savedBank));
-
-      const savedSecurity = localStorage.getItem("sve_security_settings");
-      if (savedSecurity) {
-        const parsed = JSON.parse(savedSecurity);
-        setSecuritySettings((prev) => ({
-          ...prev,
-          adminEmail: parsed.adminEmail || prev.adminEmail,
-          sessionTimeout: parsed.sessionTimeout || prev.sessionTimeout,
-          twoFactorEnabled: !!parsed.twoFactorEnabled,
-        }));
-      }
     } catch (e) {
-      console.error("Failed to load settings from storage", e);
+      console.warn("Local storage cache load notice", e);
     }
+
+    // 2. Fetch ground-truth settings from MongoDB backend
+    const fetchRemoteSettings = async () => {
+      try {
+        const apiUrl = getApiUrl();
+        const token = getAuthToken();
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await fetch(`${apiUrl}/settings`, { headers, credentials: "include" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.company) {
+            setCompanySettings(data.company);
+            localStorage.setItem("sve_company_settings", JSON.stringify(data.company));
+          }
+          if (data.invoice) {
+            setInvoiceDefaults(data.invoice);
+            localStorage.setItem("sve_invoice_defaults", JSON.stringify(data.invoice));
+          }
+          if (data.tax) {
+            setTaxSettings(data.tax);
+            localStorage.setItem("sve_tax_settings", JSON.stringify(data.tax));
+          }
+          if (data.bank) {
+            setBankSettings(data.bank);
+            localStorage.setItem("sve_bank_settings", JSON.stringify(data.bank));
+          }
+        }
+      } catch (err) {
+        console.warn("Remote settings sync fallback to cache:", err);
+      }
+    };
+
+    fetchRemoteSettings();
   }, []);
 
   const showToast = (msg: string) => {
@@ -127,8 +151,41 @@ export default function SettingsPage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const handleSaveSettings = (tabName?: string) => {
+  const handleSaveSettings = async (tabName?: string) => {
+    // Validate Company GSTIN if present
+    if (companySettings.gstin && companySettings.gstin.trim()) {
+      const gstinPattern = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+      if (!gstinPattern.test(companySettings.gstin.trim().toUpperCase())) {
+        showToast("⚠ Invalid Company GSTIN format. Expected 15 characters (e.g., 24AAAFO1234F1Z9).");
+        return;
+      }
+    }
+
+    // Validate Bank IFSC if present
+    if (bankSettings.ifscCode && bankSettings.ifscCode.trim()) {
+      const ifscPattern = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+      if (!ifscPattern.test(bankSettings.ifscCode.trim().toUpperCase())) {
+        showToast("⚠ Invalid IFSC code. Expected 11 characters (e.g., BARB0ODHAVA, 5th character '0').");
+        return;
+      }
+    }
+
     setIsSaving(true);
+    const fullPayload = {
+      company: {
+        ...companySettings,
+        gstin: companySettings.gstin ? companySettings.gstin.trim().toUpperCase() : "",
+        pan: companySettings.pan ? companySettings.pan.trim().toUpperCase() : ""
+      },
+      invoice: invoiceDefaults,
+      tax: taxSettings,
+      bank: {
+        ...bankSettings,
+        ifscCode: bankSettings.ifscCode ? bankSettings.ifscCode.trim().toUpperCase() : ""
+      }
+    };
+
+    // Save to local cache immediately
     try {
       localStorage.setItem("sve_company_settings", JSON.stringify(companySettings));
       localStorage.setItem("sve_invoice_defaults", JSON.stringify(invoiceDefaults));
@@ -142,19 +199,39 @@ export default function SettingsPage() {
           twoFactorEnabled: securitySettings.twoFactorEnabled,
         })
       );
+    } catch (e) {
+      console.warn("Local cache save error", e);
+    }
 
-      setTimeout(() => {
-        setIsSaving(false);
+    // Persist to MongoDB backend across all devices
+    try {
+      const apiUrl = getApiUrl();
+      const token = getAuthToken();
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+      const res = await fetch(`${apiUrl}/settings`, {
+        method: "PUT",
+        headers,
+        credentials: "include",
+        body: JSON.stringify(fullPayload)
+      });
+
+      if (res.ok) {
         showToast(
           tabName
-            ? `✓ ${tabName} updated & saved successfully!`
-            : "✓ All system settings saved successfully!"
+            ? `✓ ${tabName} updated & synchronized with database!`
+            : "✓ All system settings saved to cloud database!"
         );
-      }, 400);
+      } else {
+        showToast("✓ Settings saved locally (remote sync pending)");
+      }
     } catch (err) {
-      console.error("Save settings error", err);
+      console.error("Save settings remote sync error", err);
+      showToast("✓ Settings saved locally");
+    } finally {
       setIsSaving(false);
-      alert("Failed to save settings.");
     }
   };
 

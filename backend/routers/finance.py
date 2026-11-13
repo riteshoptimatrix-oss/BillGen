@@ -33,10 +33,10 @@ async def get_finance_overview(
         inv_date = str(inv.get("date", ""))[:10]
         if inv_date == today_str:
             today_sales += amt
-        if status_val == "Paid":
-            paid_sales += amt
-        else:
-            pending_sales += amt
+        amt_paid = float(inv.get("amount_paid", amt if status_val == "Paid" else 0.0))
+        bal_due = float(inv.get("balance_due", 0.0 if status_val == "Paid" else (amt - amt_paid)))
+        paid_sales += amt_paid
+        pending_sales += bal_due
 
     total_purchases = 0.0
     paid_purchases = 0.0

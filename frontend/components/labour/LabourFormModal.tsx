@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getApiUrl, formatImageUrl } from "@/lib/api";
+import { getApiUrl, formatImageUrl, getAuthToken } from "@/lib/api";
 import {
   Labour,
   WORK_TYPES,
@@ -19,7 +19,10 @@ import {
   MapPin,
   Calendar,
   IndianRupee,
-  Link as LinkIcon
+  Link as LinkIcon,
+  FileText,
+  Loader2,
+  ExternalLink
 } from "lucide-react";
 
 interface LabourFormModalProps {
@@ -55,6 +58,9 @@ export default function LabourFormModal({
   const [imageInputMode, setImageInputMode] = useState<"upload" | "url">("upload");
   const [imageUrlInput, setImageUrlInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isUploadingAadhar, setIsUploadingAadhar] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"basic" | "documents" | "employment">("basic");
 
   useEffect(() => {
@@ -87,6 +93,9 @@ export default function LabourFormModal({
       });
       setImageUrlInput("");
     }
+    setUploadError(null);
+    setIsUploadingAadhar(false);
+    setIsUploadingAvatar(false);
     setActiveTab("basic");
   }, [labourToEdit, isOpen, totalLaboursCount]);
 
@@ -99,6 +108,19 @@ export default function LabourFormModal({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > 10 * 1024 * 1024) {
+      alert("File size exceeds 10MB limit. Please choose a smaller file.");
+      return;
+    }
+
+    if (target === "avatar") {
+      setIsUploadingAvatar(true);
+    } else {
+      setIsUploadingAadhar(true);
+    }
+    setUploadError(null);
+
+    // Keep local preview while upload completes
     const localUrl = URL.createObjectURL(file);
     if (target === "avatar") {
       setFormData((prev) => ({ ...prev, image: localUrl }));
@@ -110,20 +132,51 @@ export default function LabourFormModal({
       const uploadData = new FormData();
       uploadData.append("file", file);
       const apiUrl = getApiUrl();
+      const token = getAuthToken();
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+
       const res = await fetch(`${apiUrl}/labours/upload`, {
         method: "POST",
+        headers,
         body: uploadData
       });
+
       if (res.ok) {
         const data = await res.json();
+        const serverUrl = data.url || data.path;
         if (target === "avatar") {
-          setFormData((prev) => ({ ...prev, image: data.url }));
+          setFormData((prev) => ({ ...prev, image: serverUrl }));
         } else {
-          setFormData((prev) => ({ ...prev, aadhar_image: data.url }));
+          setFormData((prev) => ({ ...prev, aadhar_image: serverUrl }));
+        }
+      } else {
+        const errJson = await res.json().catch(() => ({ detail: "Upload failed" }));
+        const msg = errJson.detail || "Server rejected document format or size.";
+        alert(`Upload error: ${msg}`);
+        setUploadError(msg);
+        // Reset to original to prevent saving invalid local blob
+        if (target === "avatar") {
+          setFormData((prev) => ({ ...prev, image: labourToEdit?.image || "" }));
+        } else {
+          setFormData((prev) => ({ ...prev, aadhar_image: labourToEdit?.aadhar_image || "" }));
         }
       }
-    } catch (err) {
-      console.warn("Upload maintained local object url", err);
+    } catch (err: any) {
+      console.error("Upload error", err);
+      const msg = err.message || "Network error while uploading";
+      alert(`Could not upload file: ${msg}`);
+      setUploadError(msg);
+      if (target === "avatar") {
+        setFormData((prev) => ({ ...prev, image: labourToEdit?.image || "" }));
+      } else {
+        setFormData((prev) => ({ ...prev, aadhar_image: labourToEdit?.aadhar_image || "" }));
+      }
+    } finally {
+      if (target === "avatar") {
+        setIsUploadingAvatar(false);
+      } else {
+        setIsUploadingAadhar(false);
+      }
     }
   };
 
@@ -134,19 +187,36 @@ export default function LabourFormModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isUploadingAadhar || isUploadingAvatar) {
+      alert("Please wait until the photo / Aadhaar document finishes uploading.");
+      return;
+    }
     if (!formData.name.trim()) {
       alert("Please enter worker full name.");
+      setActiveTab("basic");
+      return;
+    }
+
+    // Statutory Indian Mobile Validation (10 digits starting with 6-9)
+    const rawDigits = formData.mobile_number.replace(/[^0-9]/g, "");
+    const cleanMobile = rawDigits.startsWith("91") && rawDigits.length === 12 ? rawDigits.slice(2) : rawDigits;
+    if (!cleanMobile || !/^[6-9]\d{9}$/.test(cleanMobile)) {
+      alert("Please enter a valid 10-digit Indian mobile number (starting with 6, 7, 8, or 9).");
+      setActiveTab("basic");
       return;
     }
 
     setIsSubmitting(true);
-    const rawDigits = formData.mobile_number.replace(/[^0-9]/g, "");
-    const formattedPhone = rawDigits ? `+91 ${rawDigits}` : "+91 98250 14829";
+    const token = getAuthToken();
+    const headers: HeadersInit = {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    };
 
     const payload = {
       name: formData.name.trim(),
       labour_id: formData.labour_id.trim(),
-      mobile_number: formattedPhone,
+      mobile_number: cleanMobile,
       address: formData.address.trim(),
       salary: Number(formData.salary) || 0,
       joining_date: formData.joining_date,
@@ -162,7 +232,8 @@ export default function LabourFormModal({
         const targetId = labourToEdit._id || labourToEdit.id;
         const res = await fetch(`${apiUrl}/labours/${targetId}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers,
+          credentials: "include",
           body: JSON.stringify(payload)
         });
 
@@ -178,7 +249,8 @@ export default function LabourFormModal({
       } else {
         const res = await fetch(`${apiUrl}/labours/`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
+          credentials: "include",
           body: JSON.stringify(payload)
         });
 
@@ -413,35 +485,90 @@ export default function LabourFormModal({
 
               {/* Aadhar KYC Document */}
               <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/90 space-y-3">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block">
-                  Aadhar Card KYC Verification Document
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block">
+                    Aadhaar Card KYC Verification Document
+                  </span>
+                  {formData.aadhar_image && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      <Check className="w-3 h-3 text-emerald-600" />
+                      Document Ready
+                    </span>
+                  )}
+                </div>
+
+                {uploadError && (
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium">
+                    ⚠️ {uploadError}
+                  </div>
+                )}
 
                 <div className="flex flex-col sm:flex-row items-center gap-4">
-                  <div className="flex-1 w-full border-2 border-dashed border-slate-200 hover:border-[#0260de] rounded-xl p-4 flex flex-col items-center justify-center text-center bg-white transition-colors">
-                    <IdCard className="w-8 h-8 text-[#0260de] mb-1.5" />
-                    <p className="text-xs font-bold text-slate-800">Upload Aadhar Identity Card</p>
-                    <p className="text-[10px] text-slate-400 mb-2.5">JPG, PNG or PDF (Max 5MB)</p>
-                    <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#0f172a] hover:bg-[#0260de] text-white text-xs font-bold rounded-xl shadow-2xs cursor-pointer transition-colors">
-                      <UploadCloud className="w-3.5 h-3.5" />
-                      <span>Choose File</span>
-                      <input
-                        type="file"
-                        accept="image/*,application/pdf"
-                        className="sr-only"
-                        onChange={(e) => handleFileUpload(e, "aadhar")}
-                      />
-                    </label>
+                  <div className="flex-1 w-full border-2 border-dashed border-slate-200 hover:border-[#0260de] rounded-xl p-4 flex flex-col items-center justify-center text-center bg-white transition-colors relative">
+                    {isUploadingAadhar ? (
+                      <div className="py-3 flex flex-col items-center justify-center text-center">
+                        <Loader2 className="w-7 h-7 text-[#0260de] animate-spin mb-2" />
+                        <p className="text-xs font-bold text-slate-800">Uploading Aadhaar Card...</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Encrypting and storing document securely</p>
+                      </div>
+                    ) : (
+                      <>
+                        <IdCard className="w-8 h-8 text-[#0260de] mb-1.5" />
+                        <p className="text-xs font-bold text-slate-800">
+                          {formData.aadhar_image ? "Replace Aadhaar Identity Card" : "Upload Aadhaar Identity Card"}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mb-2.5">JPG, PNG, WebP or PDF (Max 10MB)</p>
+                        <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#0f172a] hover:bg-[#0260de] text-white text-xs font-bold rounded-xl shadow-2xs cursor-pointer transition-colors active:scale-95">
+                          <UploadCloud className="w-3.5 h-3.5" />
+                          <span>{formData.aadhar_image ? "Choose New File" : "Choose File"}</span>
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            className="sr-only"
+                            onChange={(e) => handleFileUpload(e, "aadhar")}
+                          />
+                        </label>
+                      </>
+                    )}
                   </div>
 
                   {formData.aadhar_image && (
-                    <div className="w-full sm:w-44 h-32 rounded-xl border border-slate-200 bg-white p-2 relative shrink-0 flex items-center justify-center overflow-hidden shadow-2xs">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={formatImageUrl(formData.aadhar_image)}
-                        alt="Aadhar Preview"
-                        className="w-full h-full object-cover rounded-lg"
-                      />
+                    <div className="w-full sm:w-48 h-32 rounded-xl border border-slate-200 bg-white p-2 relative shrink-0 flex flex-col items-center justify-center overflow-hidden shadow-2xs group">
+                      {formData.aadhar_image.toLowerCase().endsWith(".pdf") || formData.aadhar_image.includes("application/pdf") ? (
+                        <div className="flex flex-col items-center justify-center text-center p-2">
+                          <FileText className="w-10 h-10 text-rose-500 mb-1" />
+                          <span className="text-[11px] font-bold text-slate-800 truncate max-w-[140px]">
+                            Aadhaar Document (PDF)
+                          </span>
+                          <a
+                            href={formatImageUrl(formData.aadhar_image)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-1 text-[10px] font-bold text-[#0260de] hover:underline flex items-center gap-1"
+                          >
+                            <span>Open PDF</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        </div>
+                      ) : (
+                        <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={formatImageUrl(formData.aadhar_image)}
+                            alt="Aadhaar Preview"
+                            className="w-full h-full object-cover rounded-lg"
+                          />
+                          <a
+                            href={formatImageUrl(formData.aadhar_image)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="absolute bottom-2 left-2 bg-slate-900/80 hover:bg-slate-900 text-white text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-xs flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <span>View Full</span>
+                            <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        </>
+                      )}
                       <button
                         type="button"
                         onClick={() => setFormData({ ...formData, aadhar_image: "" })}

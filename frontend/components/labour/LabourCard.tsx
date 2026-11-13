@@ -249,14 +249,30 @@ export default function LabourCard({
           {/* Aadhar Verified Status */}
           <div className="text-right">
             {labour.aadhar_image ? (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onQuickView(labour);
+                }}
+                className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200 transition-colors cursor-pointer"
+                title="View Aadhaar KYC document"
+              >
                 <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                <span>KYC Done</span>
-              </span>
+                <span>Aadhaar Done</span>
+              </button>
             ) : (
-              <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                No KYC
-              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onQuickView(labour);
+                }}
+                className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200 transition-colors cursor-pointer"
+                title="Click to upload Aadhaar card"
+              >
+                <span>+ Aadhaar</span>
+              </button>
             )}
           </div>
         </div>

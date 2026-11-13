@@ -20,6 +20,15 @@ interface InvoiceItem {
   image?: string;
 }
 
+interface PaymentTransaction {
+  id: string;
+  amount: number;
+  date: string;
+  mode: string;
+  reference_note?: string;
+  created_at?: string;
+}
+
 interface Invoice {
   _id?: string;
   id?: string;
@@ -48,7 +57,9 @@ interface Invoice {
   amount: number; // Grand total
   amount_paid?: number;
   balance_due?: number;
-  status: "Paid" | "Pending" | "Overdue";
+  paid_percentage?: number;
+  payments?: PaymentTransaction[];
+  status: "Paid" | "Pending" | "Overdue" | "Partially Paid";
 
   bank_name?: string;
   account_holder_name?: string;
@@ -164,12 +175,130 @@ export default function BillInvoicePage() {
   const [isDownloading, setIsDownloading] = useState(false);
 
   // WhatsApp Share State
-  type WhatsAppTemplateType = "ALL" | "PAID" | "PENDING" | "OVERDUE";
+  type WhatsAppTemplateType = "ALL" | "PAID" | "PARTIALLY PAID" | "PENDING" | "OVERDUE";
   const [whatsappInvoice, setWhatsappInvoice] = useState<Invoice | null>(null);
   const [whatsappPhone, setWhatsappPhone] = useState("");
   const [whatsappMessage, setWhatsappMessage] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState<WhatsAppTemplateType>("ALL");
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+
+  // Manual Partial Payment State
+  const [paymentModalInvoice, setPaymentModalInvoice] = useState<Invoice | null>(null);
+  const [payAmount, setPayAmount] = useState<string>("");
+  const [payDate, setPayDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [payMode, setPayMode] = useState<string>("Bank Transfer");
+  const [payNote, setPayNote] = useState<string>("");
+  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+  const [isDeletingPaymentId, setIsDeletingPaymentId] = useState<string | null>(null);
+
+  const openPaymentModal = (inv: Invoice) => {
+    setPaymentModalInvoice(inv);
+    const total = inv.amount || 0;
+    const paid = inv.amount_paid ?? (inv.status === "Paid" ? total : 0);
+    const bal = inv.balance_due ?? (inv.status === "Paid" ? 0 : Math.max(0, total - paid));
+    setPayAmount(bal > 0 ? bal.toString() : "");
+    setPayDate(new Date().toISOString().split("T")[0]);
+    setPayMode("Bank Transfer");
+    setPayNote("");
+  };
+
+  const handleRecordPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!paymentModalInvoice) return;
+    const invId = (paymentModalInvoice._id || paymentModalInvoice.id) as string;
+    const totalAmount = paymentModalInvoice.amount || 0;
+    const currentPaid = paymentModalInvoice.amount_paid ?? (paymentModalInvoice.status === "Paid" ? totalAmount : 0);
+    const remainingBalance = paymentModalInvoice.balance_due ?? (paymentModalInvoice.status === "Paid" ? 0 : Math.max(0, totalAmount - currentPaid));
+
+    const enteredAmt = parseFloat(payAmount);
+    if (isNaN(enteredAmt) || enteredAmt <= 0) {
+      alert("Please enter a valid payment amount greater than ₹0.");
+      return;
+    }
+    if (enteredAmt > remainingBalance + 0.01) {
+      alert(`Payment amount ₹${enteredAmt.toLocaleString("en-IN")} cannot exceed remaining balance of ₹${remainingBalance.toLocaleString("en-IN")}.`);
+      return;
+    }
+
+    try {
+      setIsSubmittingPayment(true);
+      const token = getAuthToken();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+      const res = await fetch(`${apiUrl}/invoices/${invId}/payments`, {
+        method: "POST",
+        headers,
+        credentials: "include",
+        body: JSON.stringify({
+          amount: enteredAmt,
+          date: payDate,
+          mode: payMode,
+          reference_note: payNote
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ detail: "Payment recording failed" }));
+        throw new Error(errData.detail || "Failed to record payment");
+      }
+
+      const updatedInvoice: Invoice = await res.json();
+      setInvoices((prev) =>
+        prev.map((inv) => ((inv._id || inv.id) === invId ? updatedInvoice : inv))
+      );
+      setPaymentModalInvoice(updatedInvoice);
+      const newBal = updatedInvoice.balance_due ?? Math.max(0, (updatedInvoice.amount || 0) - (updatedInvoice.amount_paid || 0));
+      setPayAmount(newBal > 0 ? newBal.toString() : "");
+      setPayNote("");
+      setToastMessage(`✓ Payment of ₹${enteredAmt.toLocaleString("en-IN")} recorded successfully for ${updatedInvoice.invoice_number}!`);
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (err: any) {
+      alert(err.message || "An error occurred while recording payment.");
+    } finally {
+      setIsSubmittingPayment(false);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!paymentModalInvoice) return;
+    if (!confirm("Are you sure you want to revert/delete this payment transaction? The invoice balance and status will be updated accordingly.")) {
+      return;
+    }
+    const invId = (paymentModalInvoice._id || paymentModalInvoice.id) as string;
+    try {
+      setIsDeletingPaymentId(paymentId);
+      const token = getAuthToken();
+      const headers: Record<string, string> = {
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+      const res = await fetch(`${apiUrl}/invoices/${invId}/payments/${paymentId}`, {
+        method: "DELETE",
+        headers,
+        credentials: "include"
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ detail: "Failed to delete payment" }));
+        throw new Error(errData.detail || "Failed to delete payment");
+      }
+
+      const updatedInvoice: Invoice = await res.json();
+      setInvoices((prev) =>
+        prev.map((inv) => ((inv._id || inv.id) === invId ? updatedInvoice : inv))
+      );
+      setPaymentModalInvoice(updatedInvoice);
+      const newBal = updatedInvoice.balance_due ?? Math.max(0, (updatedInvoice.amount || 0) - (updatedInvoice.amount_paid || 0));
+      setPayAmount(newBal > 0 ? newBal.toString() : "");
+      setToastMessage(`✓ Payment transaction reversed successfully.`);
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (err: any) {
+      alert(err.message || "Failed to revert payment.");
+    } finally {
+      setIsDeletingPaymentId(null);
+    }
+  };
 
   const buildWhatsAppMessage = (inv: Invoice, template: WhatsAppTemplateType): string => {
     const clientName = inv.client || "Valued Customer";
@@ -201,6 +330,25 @@ export default function BillInvoicePage() {
           `Thank you for your prompt payment and continued partnership with *SiddhiVinayak Enterprise*! 🙏\n\n` +
           `Warm regards,\n` +
           `*SiddhiVinayak Enterprise*`
+        );
+
+      case "PARTIALLY PAID":
+        return (
+          `*PARTIAL PAYMENT RECEIPT & BALANCE UPDATE* 🧾\n\n` +
+          `Dear *${clientName}*,\n\n` +
+          `We have received a partial payment against your invoice.\n\n` +
+          `🧾 *Invoice No.:* ${invNumber}\n` +
+          `📅 *Invoice Date:* ${invDate}\n` +
+          `⏰ *Payment Due Date:* ${dueDate}\n` +
+          `💰 *Total Invoice Amount:* ₹${grandTotal.toLocaleString("en-IN")}\n` +
+          `💵 *Total Received So Far:* ₹${paidAmount.toLocaleString("en-IN")}\n` +
+          `⚠️ *Remaining Balance Due:* ₹${balance.toLocaleString("en-IN")}\n` +
+          `📊 *Payment Progress:* ${inv.paid_percentage ?? (grandTotal > 0 ? Math.round((paidAmount / grandTotal) * 100) : 0)}% Collected\n\n` +
+          `📄 *Download Tax Invoice (PDF):*\n` +
+          `${defaultPdfUrl}\n\n` +
+          `Kindly clear the remaining balance at your convenience.\n\n` +
+          `Warm regards,\n` +
+          `*SiddhiVinayak Enterprise* 🙏`
         );
 
       case "PENDING":
@@ -892,29 +1040,46 @@ export default function BillInvoicePage() {
   // Filtered Invoices List
   const filteredInvoices = useMemo(() => {
     return invoices.filter((inv) => {
+      const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
-        inv.invoice_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        inv.client?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        inv.customer_gst?.toLowerCase().includes(searchQuery.toLowerCase());
+        !q ||
+        inv.invoice_number?.toLowerCase().includes(q) ||
+        inv.client?.toLowerCase().includes(q) ||
+        inv.customer_gst?.toLowerCase().includes(q);
       const matchesStatus =
-        statusFilter === "ALL" || inv.status?.toUpperCase() === statusFilter;
+        statusFilter === "ALL" ||
+        inv.status?.toUpperCase() === statusFilter ||
+        (statusFilter === "PARTIALLY PAID" &&
+          (inv.status === "Partially Paid" ||
+            (inv.paid_percentage !== undefined && inv.paid_percentage > 0 && inv.paid_percentage < 100)));
       return matchesSearch && matchesStatus;
     });
   }, [invoices, searchQuery, statusFilter]);
 
   const totalInvoicedRevenue = invoices.reduce((sum, i) => sum + (i.amount || 0), 0);
-  const totalPaidRevenue = invoices
-    .filter((i) => i.status === "Paid")
-    .reduce((sum, i) => sum + (i.amount || 0), 0);
-  const totalPendingBalance = invoices.reduce((sum, i) => sum + (i.balance_due || (i.status !== "Paid" ? i.amount : 0)), 0);
+  const totalPaidRevenue = invoices.reduce(
+    (sum, i) => sum + (i.amount_paid !== undefined ? i.amount_paid : (i.status === "Paid" ? (i.amount || 0) : 0)),
+    0
+  );
+  const totalPendingBalance = invoices.reduce(
+    (sum, i) => sum + (i.balance_due !== undefined ? i.balance_due : (i.status !== "Paid" ? (i.amount || 0) : 0)),
+    0
+  );
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, paidPercentage?: number) => {
     switch (status) {
       case "Paid":
         return (
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>
-            Paid
+            Paid (100%)
+          </span>
+        );
+      case "Partially Paid":
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mr-1.5 animate-pulse"></span>
+            Partially Paid {paidPercentage !== undefined ? `(${paidPercentage}%)` : ""}
           </span>
         );
       case "Pending":
@@ -1033,7 +1198,7 @@ export default function BillInvoicePage() {
 
           <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mr-1">Status:</span>
-            {["ALL", "PAID", "PENDING", "OVERDUE"].map((st) => (
+            {["ALL", "PAID", "PARTIALLY PAID", "PENDING", "OVERDUE"].map((st) => (
               <button
                 key={st}
                 onClick={() => setStatusFilter(st)}
@@ -1071,6 +1236,7 @@ export default function BillInvoicePage() {
                   <th className="py-3 px-6">Invoice Date</th>
                   <th className="py-3 px-6">Due Date</th>
                   <th className="py-3 px-6 text-right">Grand Total (₹)</th>
+                  <th className="py-3 px-6 text-center">Payment Progress</th>
                   <th className="py-3 px-6 text-right">Balance Due (₹)</th>
                   <th className="py-3 px-6 text-center">Payment Status</th>
                   <th className="py-3 px-6 text-right">Actions</th>
@@ -1079,6 +1245,11 @@ export default function BillInvoicePage() {
               <tbody className="divide-y divide-gray-100">
                 {filteredInvoices.map((inv) => {
                   const id = (inv._id || inv.id) as string;
+                  const grandTotal = inv.amount || 0;
+                  const amtPaid = inv.amount_paid ?? (inv.status === "Paid" ? grandTotal : 0);
+                  const balDue = inv.balance_due ?? (inv.status === "Paid" ? 0 : Math.max(0, grandTotal - amtPaid));
+                  const pct = inv.paid_percentage ?? (grandTotal > 0 ? Math.min(100, Math.round((amtPaid / grandTotal) * 100)) : 0);
+
                   return (
                     <tr key={id} className="hover:bg-gray-50/70 transition-colors">
                       <td className="py-3.5 px-6 font-mono font-bold text-gray-900 whitespace-nowrap">
@@ -1097,15 +1268,45 @@ export default function BillInvoicePage() {
                       <td className="py-3.5 px-6 text-gray-500 whitespace-nowrap">{inv.date}</td>
                       <td className="py-3.5 px-6 text-gray-500 whitespace-nowrap">{inv.due_date || "-"}</td>
                       <td className="py-3.5 px-6 text-right font-black text-gray-900 whitespace-nowrap">
-                        ₹{(inv.amount || 0).toLocaleString("en-IN")}
+                        ₹{grandTotal.toLocaleString("en-IN")}
+                      </td>
+                      <td className="py-3.5 px-6 min-w-[170px]">
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center text-[10px] font-bold">
+                            <span className="text-emerald-700">₹{amtPaid.toLocaleString("en-IN")} recd</span>
+                            <span className={pct === 100 ? "text-emerald-600 font-black" : pct > 0 ? "text-blue-600 font-black" : "text-gray-400"}>
+                              {pct}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-300 ${
+                                pct === 100
+                                  ? "bg-emerald-500"
+                                  : pct > 0
+                                  ? "bg-gradient-to-r from-blue-500 to-indigo-500"
+                                  : "bg-transparent"
+                              }`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
                       </td>
                       <td className="py-3.5 px-6 text-right font-bold text-amber-600 whitespace-nowrap">
-                        ₹{(inv.balance_due ?? (inv.status !== "Paid" ? inv.amount : 0)).toLocaleString("en-IN")}
+                        ₹{balDue.toLocaleString("en-IN")}
                       </td>
                       <td className="py-3.5 px-6 text-center whitespace-nowrap">
-                        {getStatusBadge(inv.status)}
+                        {getStatusBadge(inv.status, pct)}
                       </td>
                       <td className="py-3.5 px-6 text-right whitespace-nowrap space-x-1.5">
+                        <button
+                          type="button"
+                          onClick={() => openPaymentModal(inv)}
+                          className="px-2.5 py-1 text-[11px] font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg transition-all inline-flex items-center gap-1 shadow-2xs active:scale-95 cursor-pointer"
+                          title="Record payment received from client"
+                        >
+                          <span>₹ Pay</span>
+                        </button>
                         <button
                           type="button"
                           onClick={() => openWhatsAppModal(inv)}
@@ -2364,7 +2565,7 @@ export default function BillInvoicePage() {
                   Invoice Status: <strong className="text-[#0f172a] uppercase font-bold">{whatsappInvoice?.status || "General"}</strong>
                 </span>
               </div>
-              <div className="grid grid-cols-4 gap-1.5 p-1 bg-[#f1f5f9] rounded-xl border border-[#e2e8f0]">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 p-1 bg-[#f1f5f9] rounded-xl border border-[#e2e8f0]">
                 <button
                   type="button"
                   onClick={() => {
@@ -2392,6 +2593,20 @@ export default function BillInvoicePage() {
                   }`}
                 >
                   ✅ PAID
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedTemplate("PARTIALLY PAID");
+                    if (whatsappInvoice) setWhatsappMessage(buildWhatsAppMessage(whatsappInvoice, "PARTIALLY PAID"));
+                  }}
+                  className={`py-1.5 px-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer text-center ${
+                    selectedTemplate === "PARTIALLY PAID"
+                      ? "bg-blue-600 text-white shadow-xs"
+                      : "text-[#64748b] hover:text-blue-700"
+                  }`}
+                >
+                  🧾 PARTIAL
                 </button>
                 <button
                   type="button"
@@ -2485,6 +2700,321 @@ export default function BillInvoicePage() {
             </div>
           </div>
         </div>
-      )}</div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: MANUAL PARTIAL & FULL PAYMENT TRACKING */}
+      {/* ========================================================= */}
+      {paymentModalInvoice && (() => {
+        const inv = paymentModalInvoice;
+        const total = inv.amount || 0;
+        const paid = inv.amount_paid ?? (inv.status === "Paid" ? total : 0);
+        const bal = inv.balance_due ?? (inv.status === "Paid" ? 0 : Math.max(0, total - paid));
+        const pct = inv.paid_percentage ?? (total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0);
+        const enteredAmtNum = parseFloat(payAmount) || 0;
+        const projectedPaid = Math.min(total, paid + enteredAmtNum);
+        const projectedBal = Math.max(0, bal - enteredAmtNum);
+        const projectedPct = total > 0 ? Math.min(100, Math.round((projectedPaid / total) * 100)) : 0;
+        const projectedStatus = projectedBal === 0 ? "Fully Paid" : projectedPaid > 0 ? "Partially Paid" : "Unpaid";
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+            <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl border border-[#e2e8f0] relative my-6 max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
+              {/* Modal Header */}
+              <div className="flex justify-between items-start border-b border-[#e2e8f0] pb-4 mb-5">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-[#0260de] bg-[#0260de]/10 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                      Payment Management
+                    </span>
+                    <span className="font-mono text-xs font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded">
+                      {inv.invoice_number}
+                    </span>
+                  </div>
+                  <h2 className="text-xl font-black text-gray-900 mt-1.5 tracking-tight">
+                    Record Payment Received
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Customer: <span className="font-bold text-gray-800">{inv.client}</span> • Invoice Date: {inv.date}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPaymentModalInvoice(null)}
+                  className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center text-sm font-bold transition-colors cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Status & Balance Summary Cards */}
+              <div className="grid grid-cols-3 gap-3 mb-5">
+                <div className="bg-gray-50 border border-gray-200/80 rounded-2xl p-3.5 text-center">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Total Invoice</p>
+                  <p className="text-base sm:text-lg font-black text-gray-900 mt-1">₹{total.toLocaleString("en-IN")}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Grand Total</p>
+                </div>
+                <div className="bg-emerald-50 border border-emerald-200/80 rounded-2xl p-3.5 text-center">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Amount Received</p>
+                  <p className="text-base sm:text-lg font-black text-emerald-700 mt-1">₹{paid.toLocaleString("en-IN")}</p>
+                  <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">{pct}% Collected</p>
+                </div>
+                <div className={`border rounded-2xl p-3.5 text-center ${bal > 0 ? "bg-amber-50 border-amber-200/80" : "bg-gray-50 border-gray-200"}`}>
+                  <p className={`text-[10px] font-bold uppercase tracking-wider ${bal > 0 ? "text-amber-700" : "text-gray-500"}`}>Remaining Due</p>
+                  <p className={`text-base sm:text-lg font-black mt-1 ${bal > 0 ? "text-amber-700" : "text-gray-700"}`}>₹{bal.toLocaleString("en-IN")}</p>
+                  <p className={`text-[10px] font-semibold mt-0.5 ${bal > 0 ? "text-amber-600" : "text-emerald-600"}`}>
+                    {bal === 0 ? "Fully Settled" : `${100 - pct}% Pending`}
+                  </p>
+                </div>
+              </div>
+
+              {/* Visual Progress Bar */}
+              <div className="bg-gray-50 border border-[#e2e8f0] rounded-2xl p-4 mb-6">
+                <div className="flex justify-between items-center text-xs font-bold mb-2">
+                  <span className="text-gray-700 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-[#0260de]"></span>
+                    Payment Completion Progress
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] ${
+                    pct === 100
+                      ? "bg-emerald-100 text-emerald-800"
+                      : pct > 0
+                      ? "bg-blue-100 text-blue-800"
+                      : "bg-gray-200 text-gray-700"
+                  }`}>
+                    {pct === 100 ? "100% Fully Paid" : pct > 0 ? `${pct}% Paid • ${100 - pct}% Pending` : "0% Unpaid"}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden p-0.5">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      pct === 100
+                        ? "bg-emerald-500"
+                        : "bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-500"
+                    }`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Add Payment Form */}
+              {bal > 0 ? (
+                <form onSubmit={handleRecordPayment} className="space-y-4 mb-6 bg-blue-50/40 border border-blue-200/60 rounded-2xl p-5">
+                  <h3 className="text-sm font-black text-gray-900 flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-lg bg-[#0260de] text-white flex items-center justify-center text-xs">+</span>
+                    Record New Partial or Full Payment
+                  </h3>
+
+                  {/* Amount Field + Quick Presets */}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                      Amount Received (₹) <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 font-bold text-gray-500">₹</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max={bal}
+                        step="any"
+                        required
+                        value={payAmount}
+                        onChange={(e) => setPayAmount(e.target.value)}
+                        placeholder={`Enter amount (Max: ₹${bal.toLocaleString("en-IN")})`}
+                        className="w-full pl-8 pr-4 py-2.5 text-sm font-bold text-gray-900 bg-white border border-[#e2e8f0] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
+                      />
+                    </div>
+
+                    {/* Quick Preset Buttons */}
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase">Quick Fill:</span>
+                      <button
+                        type="button"
+                        onClick={() => setPayAmount(bal.toString())}
+                        className="px-2 py-1 text-[11px] font-bold bg-white text-emerald-700 border border-emerald-300 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer"
+                      >
+                        Full Remaining (₹{bal.toLocaleString("en-IN")})
+                      </button>
+                      {bal > 500 && (
+                        <button
+                          type="button"
+                          onClick={() => setPayAmount(Math.round(bal * 0.5).toString())}
+                          className="px-2 py-1 text-[11px] font-bold bg-white text-blue-700 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer"
+                        >
+                          50% (₹{Math.round(bal * 0.5).toLocaleString("en-IN")})
+                        </button>
+                      )}
+                      {bal > 1000 && (
+                        <button
+                          type="button"
+                          onClick={() => setPayAmount(Math.round(bal * 0.25).toString())}
+                          className="px-2 py-1 text-[11px] font-bold bg-white text-indigo-700 border border-indigo-300 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer"
+                        >
+                          25% (₹{Math.round(bal * 0.25).toLocaleString("en-IN")})
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Projected Status Preview */}
+                    {enteredAmtNum > 0 && enteredAmtNum <= bal && (
+                      <div className="mt-3 p-2.5 bg-white border border-blue-200 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                        <span className="text-gray-600">
+                          After this payment: <strong className="text-emerald-600">₹{projectedPaid.toLocaleString("en-IN")}</strong> paid ({projectedPct}%)
+                        </span>
+                        <span className="font-bold text-blue-700">
+                          Status &rarr; {projectedStatus} (Balance: ₹{projectedBal.toLocaleString("en-IN")})
+                        </span>
+                      </div>
+                    )}
+                    {enteredAmtNum > bal && (
+                      <p className="mt-1.5 text-xs text-rose-600 font-bold">
+                        ⚠️ Entered amount exceeds remaining balance of ₹{bal.toLocaleString("en-IN")}!
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                        Payment Date <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={payDate}
+                        onChange={(e) => setPayDate(e.target.value)}
+                        className="w-full px-3 py-2 text-xs font-semibold text-gray-800 bg-white border border-[#e2e8f0] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                        Payment Mode <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={payMode}
+                        onChange={(e) => setPayMode(e.target.value)}
+                        className="w-full px-3 py-2 text-xs font-semibold text-gray-800 bg-white border border-[#e2e8f0] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
+                      >
+                        <option value="Bank Transfer">Bank Transfer (NEFT/RTGS/IMPS)</option>
+                        <option value="UPI">UPI / QR Code</option>
+                        <option value="Cash">Cash</option>
+                        <option value="Cheque">Cheque</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                      Reference Note / Transaction ID (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={payNote}
+                      onChange={(e) => setPayNote(e.target.value)}
+                      placeholder="e.g. UTR / UPI Ref ID / Cheque # / Cash Receipt #"
+                      className="w-full px-3 py-2 text-xs text-gray-800 bg-white border border-[#e2e8f0] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
+                    />
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      type="submit"
+                      disabled={isSubmittingPayment || enteredAmtNum <= 0 || enteredAmtNum > bal}
+                      className="w-full py-2.5 px-4 bg-[#0260de] hover:bg-[#0252bf] text-white text-xs font-bold rounded-xl transition-all shadow-md active:scale-98 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      {isSubmittingPayment ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <span>Recording Payment...</span>
+                        </>
+                      ) : (
+                        <span>
+                          Save Payment (+ ₹{enteredAmtNum > 0 ? enteredAmtNum.toLocaleString("en-IN") : "0"})
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="p-4 mb-6 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                    ✓
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-emerald-900">Invoice Fully Paid (100%)</h4>
+                    <p className="text-[11px] text-emerald-700 mt-0.5">
+                      The full invoice amount of ₹{total.toLocaleString("en-IN")} has been received. No remaining balance due.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Payment History List */}
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3 flex items-center justify-between">
+                  <span>Payment History ({inv.payments?.length || 0} Transactions)</span>
+                  <span className="text-[10px] text-gray-400 font-normal">All times recorded dynamically</span>
+                </h4>
+
+                {(!inv.payments || inv.payments.length === 0) ? (
+                  <div className="p-6 bg-gray-50 border border-dashed border-gray-200 rounded-2xl text-center">
+                    <p className="text-xs font-semibold text-gray-500">No payment transactions recorded yet.</p>
+                    <p className="text-[10px] text-gray-400 mt-1">Use the form above to record customer payments.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                    {inv.payments.map((p, idx) => (
+                      <div
+                        key={p.id || idx}
+                        className="flex items-center justify-between p-3 bg-white border border-[#e2e8f0] rounded-xl hover:bg-gray-50/60 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0">
+                            ₹
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black text-gray-900">
+                                ₹{p.amount.toLocaleString("en-IN")}
+                              </span>
+                              <span className="text-[10px] font-semibold bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                                {p.mode}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-gray-500 mt-0.5">
+                              {p.date} {p.reference_note ? `• ${p.reference_note}` : ""}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePayment(p.id)}
+                          disabled={isDeletingPaymentId === p.id}
+                          className="px-2 py-1 text-[10px] font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                          title="Revert/Delete this payment transaction"
+                        >
+                          {isDeletingPaymentId === p.id ? "Reverting..." : "Revert"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="pt-5 mt-5 border-t border-[#e2e8f0] flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setPaymentModalInvoice(null)}
+                  className="px-5 py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}</div>
   );
 }
