@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
-import { getApiUrl } from "@/lib/api";
+import { getApiUrl, getAuthToken } from "@/lib/api";
 import NotificationCenter from "@/components/NotificationCenter";
 import {
   ComposedChart,
@@ -64,7 +64,7 @@ interface DashboardData {
   recentInvoices: Invoice[];
 }
 
-type DatePeriodKey = "all" | "jun-2026" | "may-2026" | "apr-2026" | "last-3m" | "last-6m" | "year-2026";
+type DatePeriodKey = "all" | "current-month" | "last-3m" | "last-6m" | "year";
 type ChartRangeKey = "3m" | "6m" | "year";
 type AlertFilterKey = "all" | "stock" | "overdue" | "salary";
 
@@ -75,7 +75,7 @@ export default function DashboardPage() {
   // 1. DATE FILTER STATE (Header Pill & Chart dropdown)
   const [selectedPeriod, setSelectedPeriod] = useState<DatePeriodKey>("all");
   const [isDateDropdownOpen, setIsDateDropdownOpen] = useState(false);
-  const [chartRange, setChartRange] = useState<ChartRangeKey>("6m");
+  const [chartRange, setChartRange] = useState<ChartRangeKey>("year");
   const [isChartDropdownOpen, setIsChartDropdownOpen] = useState(false);
 
   // 2. NOTIFICATION / ALERT FILTER STATE
@@ -128,10 +128,20 @@ export default function DashboardPage() {
     const fetchDashboardData = async () => {
       try {
         const apiUrl = getApiUrl();
-        const res = await fetch(`${apiUrl}/dashboard/summary`);
+        const token = getAuthToken();
+        const res = await fetch(`${apiUrl}/dashboard/summary`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          credentials: "include"
+        });
         if (res.ok) {
           const summaryData = await res.json();
           setData(summaryData);
+        } else {
+          // Attempt without headers if server is in optional mode
+          const fallbackRes = await fetch(`${apiUrl}/dashboard/summary`);
+          if (fallbackRes.ok) {
+            setData(await fallbackRes.json());
+          }
         }
       } catch (error) {
         console.error("Failed to fetch dashboard data", error);
@@ -203,102 +213,126 @@ export default function DashboardPage() {
     setDismissedAlertIds(prev => [...prev, ...idsToDismiss]);
   };
 
-  // Dynamic Date Period Labels and KPI calculations
-  const periodConfigs: Record<DatePeriodKey, { label: string; periodText: string; revenue: number; profit: number; pending: number; growth: string }> = {
-    "all": {
-      label: "All Time",
-      periodText: "Historical aggregate",
-      revenue: data?.kpis.totalRevenue || 947540,
-      profit: data?.kpis.netProfit || 627840,
-      pending: data?.kpis.pendingBills || 3,
-      growth: "+14% from last month"
-    },
-    "jun-2026": {
-      label: "Jun 2026",
-      periodText: "Current active month",
-      revenue: 58000,
-      profit: 31500,
-      pending: 1,
-      growth: "+52% vs May 2026"
-    },
-    "may-2026": {
-      label: "May 2026",
-      periodText: "Previous calendar month",
-      revenue: 38000,
-      profit: 21000,
-      pending: 2,
-      growth: "+72% vs Apr 2026"
-    },
-    "apr-2026": {
-      label: "Apr 2026",
-      periodText: "Q2 opening month",
-      revenue: 22000,
-      profit: 9000,
-      pending: 1,
-      growth: "+29% vs Mar 2026"
-    },
-    "last-3m": {
-      label: "Last 3 Months",
-      periodText: "Apr 2026 – Jun 2026 (Q2)",
-      revenue: 118000,
-      profit: 61500,
-      pending: 2,
-      growth: "+48% vs Q1 2026"
-    },
-    "last-6m": {
-      label: "Last 6 Months",
-      periodText: "Jan 2026 – Jun 2026 (H1)",
-      revenue: 158000,
-      profit: 78500,
-      pending: 3,
-      growth: "+28% vs H2 2025"
-    },
-    "year-2026": {
-      label: "This Year (2026)",
-      periodText: "Full year FY 2026-27",
-      revenue: data?.kpis.totalRevenue || 947540,
-      profit: data?.kpis.netProfit || 627840,
-      pending: data?.kpis.pendingBills || 3,
-      growth: "+31% YoY performance"
-    }
-  };
+  // Current date markers
+  const currentYear = new Date().getFullYear();
+  const currentMonthIdx = new Date().getMonth();
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const currentMonthName = monthNames[currentMonthIdx];
 
-  const currentPeriodConfig = periodConfigs[selectedPeriod];
+  // Dynamic Date Period Labels and KPI calculations based purely on real database data
+  const periodConfigs: Record<DatePeriodKey, { label: string; periodText: string; revenue: number; profit: number; pending: number; growth: string }> = useMemo(() => {
+    const rawChartData = data?.chartData || [];
 
-  // Dynamic Monthly Chart Data based on range filter
-  const fullYearChartData: ChartData[] = [
-    { name: "Jan", Revenue: 10000, Expenses: 5000 },
-    { name: "Feb", Revenue: 13000, Expenses: 7000 },
-    { name: "Mar", Revenue: 17000, Expenses: 11000 },
-    { name: "Apr", Revenue: 22000, Expenses: 13000 },
-    { name: "May", Revenue: 38000, Expenses: 17000 },
-    { name: "Jun", Revenue: 58000, Expenses: 26500 },
-    { name: "Jul", Revenue: 62000, Expenses: 28000 },
-    { name: "Aug", Revenue: 71000, Expenses: 31000 },
-    { name: "Sep", Revenue: 79000, Expenses: 34000 },
-    { name: "Oct", Revenue: 85000, Expenses: 36000 },
-    { name: "Nov", Revenue: 94000, Expenses: 39000 },
-    { name: "Dec", Revenue: 105000, Expenses: 42000 },
-  ];
+    const sumMetrics = (items: ChartData[]) => {
+      const rev = items.reduce((acc, c) => acc + (c.Revenue || 0), 0);
+      const exp = items.reduce((acc, c) => acc + (c.Expenses || 0), 0);
+      return { rev, profit: rev - exp };
+    };
 
+    // 1. All Time
+    const allRev = data?.kpis?.totalRevenue ?? 0;
+    const allProfit = data?.kpis?.netProfit ?? 0;
+    const allPending = data?.kpis?.pendingBills ?? 0;
+
+    // 2. Current Month
+    const curMonthItem = rawChartData[currentMonthIdx] || { Revenue: 0, Expenses: 0 };
+    const curMonthRev = curMonthItem.Revenue || 0;
+    const curMonthProfit = (curMonthItem.Revenue || 0) - (curMonthItem.Expenses || 0);
+
+    // 3. Last 3 Months
+    const start3m = Math.max(0, currentMonthIdx - 2);
+    const last3mItems = rawChartData.slice(start3m, currentMonthIdx + 1);
+    const last3mMetrics = sumMetrics(last3mItems);
+
+    // 4. Last 6 Months
+    const start6m = Math.max(0, currentMonthIdx - 5);
+    const last6mItems = rawChartData.slice(start6m, currentMonthIdx + 1);
+    const last6mMetrics = sumMetrics(last6mItems);
+
+    // 5. This Year
+    const yearMetrics = sumMetrics(rawChartData);
+
+    return {
+      "all": {
+        label: "All Time",
+        periodText: "Historical aggregate",
+        revenue: allRev,
+        profit: allProfit,
+        pending: allPending,
+        growth: allRev > 0 ? "Real-time sync" : "No sales yet"
+      },
+      "current-month": {
+        label: `${currentMonthName} ${currentYear}`,
+        periodText: "Current active month",
+        revenue: curMonthRev,
+        profit: curMonthProfit,
+        pending: allPending,
+        growth: curMonthRev > 0 ? "Current month" : "No sales this month"
+      },
+      "last-3m": {
+        label: "Last 3 Months",
+        periodText: "Past quarter summary",
+        revenue: last3mMetrics.rev,
+        profit: last3mMetrics.profit,
+        pending: allPending,
+        growth: "Qtr summary"
+      },
+      "last-6m": {
+        label: "Last 6 Months",
+        periodText: "Past half-year summary",
+        revenue: last6mMetrics.rev,
+        profit: last6mMetrics.profit,
+        pending: allPending,
+        growth: "Half-year summary"
+      },
+      "year": {
+        label: `This Year (${currentYear})`,
+        periodText: `Full year ${currentYear}`,
+        revenue: yearMetrics.rev,
+        profit: yearMetrics.profit,
+        pending: allPending,
+        growth: "Annual performance"
+      }
+    };
+  }, [data, currentMonthIdx, currentYear, currentMonthName]);
+
+  const currentPeriodConfig = periodConfigs[selectedPeriod] || periodConfigs["all"];
+
+  // Dynamic Monthly Chart Data based purely on real database chartData
   const displayChartData = useMemo(() => {
+    const rawChartData = data?.chartData && data.chartData.length > 0 ? data.chartData : [
+      { name: "Jan", Revenue: 0, Expenses: 0 },
+      { name: "Feb", Revenue: 0, Expenses: 0 },
+      { name: "Mar", Revenue: 0, Expenses: 0 },
+      { name: "Apr", Revenue: 0, Expenses: 0 },
+      { name: "May", Revenue: 0, Expenses: 0 },
+      { name: "Jun", Revenue: 0, Expenses: 0 },
+      { name: "Jul", Revenue: 0, Expenses: 0 },
+      { name: "Aug", Revenue: 0, Expenses: 0 },
+      { name: "Sep", Revenue: 0, Expenses: 0 },
+      { name: "Oct", Revenue: 0, Expenses: 0 },
+      { name: "Nov", Revenue: 0, Expenses: 0 },
+      { name: "Dec", Revenue: 0, Expenses: 0 },
+    ];
+
     if (chartRange === "3m") {
-      return fullYearChartData.slice(3, 6); // Apr, May, Jun
+      const start = Math.max(0, currentMonthIdx - 2);
+      return rawChartData.slice(start, currentMonthIdx + 1);
     } else if (chartRange === "6m") {
-      return fullYearChartData.slice(0, 6); // Jan - Jun
+      const start = Math.max(0, currentMonthIdx - 5);
+      return rawChartData.slice(start, currentMonthIdx + 1);
     } else {
-      return fullYearChartData; // Full year
+      return rawChartData;
     }
-  }, [chartRange]);
+  }, [data?.chartData, chartRange, currentMonthIdx]);
 
-  const expenseSlices: ExpenseSlice[] = [
-    { name: "Material", value: 45, color: "#0260de" },
-    { name: "Labour", value: 25, color: "#3b82f6" },
-    { name: "Operations", value: 15, color: "#93c5fd" },
-    { name: "Others", value: 15, color: "#c2dafe" }
-  ];
+  const expenseSlices: ExpenseSlice[] = useMemo(() => {
+    return data?.expenseDistribution && data.expenseDistribution.length > 0
+      ? data.expenseDistribution
+      : [];
+  }, [data?.expenseDistribution]);
 
-  const totalExpenseVal = data?.kpis?.totalExpensesMonth || 26500;
+  const totalExpenseVal = data?.kpis?.totalExpensesMonth ?? 0;
 
   if (isLoading) {
     return (
@@ -361,7 +395,7 @@ export default function DashboardPage() {
                           setIsDateDropdownOpen(false);
                           if (key === "last-3m") setChartRange("3m");
                           else if (key === "last-6m") setChartRange("6m");
-                          else if (key === "year-2026") setChartRange("year");
+                          else if (key === "year" || key === "all") setChartRange("year");
                         }}
                         className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs text-left transition-colors cursor-pointer ${isSelected
                             ? "bg-blue-50 text-[#0260de] font-bold"
@@ -470,11 +504,14 @@ export default function DashboardPage() {
           </div>
 
           <div>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#eaf8ea] text-[#1e822d]">
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
-              </svg>
-              +8% surplus
+            <span
+              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                currentPeriodConfig.profit >= 0
+                  ? "bg-[#eaf8ea] text-[#1e822d]"
+                  : "bg-rose-50 text-rose-600"
+              }`}
+            >
+              {currentPeriodConfig.profit >= 0 ? "✓ Net Positive" : "⚠ Deficit"}
             </span>
           </div>
         </div>
@@ -497,8 +534,15 @@ export default function DashboardPage() {
           </div>
 
           <div>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#fff2e8] text-[#d96527]">
-              <span>⚠️</span> Requires attention
+            <span
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+                currentPeriodConfig.pending === 0
+                  ? "bg-[#eaf8ea] text-[#1e822d]"
+                  : "bg-[#fff2e8] text-[#d96527]"
+              }`}
+            >
+              <span>{currentPeriodConfig.pending === 0 ? "✓" : "⚠️"}</span>
+              {currentPeriodConfig.pending === 0 ? "All bills cleared" : "Requires attention"}
             </span>
           </div>
         </div>
@@ -546,7 +590,7 @@ export default function DashboardPage() {
                 className="flex items-center gap-1.5 bg-blue-50/70 border border-[#e2e8f0] rounded-xl px-3 py-1.5 text-xs font-semibold text-[#0260de] cursor-pointer hover:bg-blue-100 transition-colors active:scale-95"
               >
                 <span>
-                  {chartRange === "3m" ? "Last 3 Months" : chartRange === "6m" ? "Last 6 Months" : "This Year (2026)"}
+                  {chartRange === "3m" ? "Last 3 Months" : chartRange === "6m" ? "Last 6 Months" : `This Year (${currentYear})`}
                 </span>
                 <svg className={`w-3.5 h-3.5 text-[#0260de] transition-transform duration-200 ${isChartDropdownOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -558,7 +602,7 @@ export default function DashboardPage() {
                   {[
                     { key: "3m" as ChartRangeKey, label: "Last 3 Months" },
                     { key: "6m" as ChartRangeKey, label: "Last 6 Months" },
-                    { key: "year" as ChartRangeKey, label: "This Year (2026)" }
+                    { key: "year" as ChartRangeKey, label: `This Year (${currentYear})` }
                   ].map(opt => (
                     <button
                       key={opt.key}
@@ -607,7 +651,7 @@ export default function DashboardPage() {
                     if (active && payload && payload.length) {
                       return (
                         <div className="bg-white px-3.5 py-2.5 rounded-2xl shadow-xl border border-[#e2e8f0] text-xs">
-                          <p className="font-bold text-[#0f172a] mb-1">{label} 2026</p>
+                          <p className="font-bold text-[#0f172a] mb-1">{label} {currentYear}</p>
                           <div className="flex items-center gap-2">
                             <span className="w-2 h-2 rounded-full bg-[#0260de]" />
                             <span className="text-[#64748b]">Revenue:</span>
@@ -661,49 +705,61 @@ export default function DashboardPage() {
             <h2 className="text-base font-bold text-[#0f172a]">Expense Distribution</h2>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 my-auto py-2">
-            {/* Donut Chart with Centered Total */}
-            <div className="relative w-44 h-44 flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={expenseSlices}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={52}
-                    outerRadius={76}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {expenseSlices.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
+          {expenseSlices.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-6 text-center my-auto">
+              <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
+                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+                </svg>
+              </div>
+              <p className="text-xs font-semibold text-slate-600">No expenses recorded yet</p>
+              <p className="text-[11px] text-slate-400 mt-1">Purchases and staff wages will appear here</p>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 my-auto py-2">
+              {/* Donut Chart with Centered Total */}
+              <div className="relative w-44 h-44 flex items-center justify-center">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={expenseSlices}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={52}
+                      outerRadius={76}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {expenseSlices.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
 
-              {/* Inner Donut Text */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-lg font-black text-[#0f172a] tracking-tight">
-                  ₹{totalExpenseVal.toLocaleString("en-IN")}
-                </span>
-                <span className="text-[11px] font-medium text-[#64748b]">Total Expenses</span>
+                {/* Inner Donut Text */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-lg font-black text-[#0f172a] tracking-tight">
+                    ₹{totalExpenseVal.toLocaleString("en-IN")}
+                  </span>
+                  <span className="text-[11px] font-medium text-[#64748b]">Total Expenses</span>
+                </div>
+              </div>
+
+              {/* Segment Labels List */}
+              <div className="flex flex-col gap-2.5 min-w-[120px]">
+                {expenseSlices.map((slice) => (
+                  <div key={slice.name} className="flex items-center justify-between text-xs font-semibold text-[#334155] gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: slice.color }} />
+                      <span className="text-[#0f172a]">{slice.name}</span>
+                    </div>
+                    <span className="text-[#64748b] font-bold">{slice.value}%</span>
+                  </div>
+                ))}
               </div>
             </div>
-
-            {/* Segment Labels List */}
-            <div className="flex flex-col gap-2.5 min-w-[120px]">
-              {expenseSlices.map((slice) => (
-                <div key={slice.name} className="flex items-center justify-between text-xs font-semibold text-[#334155] gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: slice.color }} />
-                    <span className="text-[#0f172a]">{slice.name}</span>
-                  </div>
-                  <span className="text-[#64748b] font-bold">{slice.value}%</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -742,46 +798,54 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f1f5f9] text-xs">
-                {data.recentInvoices.map((inv) => {
-                  const statusNormalized = (inv.status || "Pending").toLowerCase();
-                  return (
-                    <tr key={inv.id} className="hover:bg-[#f8fafc] transition-colors">
-                      {/* Invoice ID / Number */}
-                      <td className="py-3 px-3 font-mono font-medium text-[#64748b] truncate max-w-[130px]" title={inv.id}>
-                        {inv.invoice_number || inv.id}
-                      </td>
+                {data.recentInvoices.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-slate-400 text-xs font-medium">
+                      No invoices recorded yet. Create an invoice in Bill &amp; Invoice to see recent activity.
+                    </td>
+                  </tr>
+                ) : (
+                  data.recentInvoices.map((inv) => {
+                    const statusNormalized = (inv.status || "Pending").toLowerCase();
+                    return (
+                      <tr key={inv.id} className="hover:bg-[#f8fafc] transition-colors">
+                        {/* Invoice ID / Number */}
+                        <td className="py-3 px-3 font-mono font-medium text-[#64748b] truncate max-w-[130px]" title={inv.id}>
+                          {inv.invoice_number || inv.id}
+                        </td>
 
-                      {/* Client Name */}
-                      <td className="py-3 px-3 font-semibold text-[#0f172a] truncate max-w-[180px]">
-                        {inv.client}
-                      </td>
+                        {/* Client Name */}
+                        <td className="py-3 px-3 font-semibold text-[#0f172a] truncate max-w-[180px]">
+                          {inv.client}
+                        </td>
 
-                      {/* Amount */}
-                      <td className="py-3 px-3 font-bold text-[#0f172a] whitespace-nowrap">
-                        ₹{inv.amount.toLocaleString("en-IN")}
-                      </td>
+                        {/* Amount */}
+                        <td className="py-3 px-3 font-bold text-[#0f172a] whitespace-nowrap">
+                          ₹{inv.amount.toLocaleString("en-IN")}
+                        </td>
 
-                      {/* Status Badge */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        {statusNormalized === "paid" && (
-                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-[#eaf8ea] text-[#1e822d] border border-[#d2f0d2]">
-                            <span>✓</span> Paid
-                          </span>
-                        )}
-                        {statusNormalized === "overdue" && (
-                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-[#fef1f0] text-[#cf382b] border border-[#fbd6d3]">
-                            Overdue <span>ⓘ</span>
-                          </span>
-                        )}
-                        {statusNormalized === "pending" && (
-                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-[#fff7ed] text-[#c2641e] border border-[#fedec2]">
-                            Pending <span>ⓘ</span>
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                        {/* Status Badge */}
+                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                          {statusNormalized === "paid" && (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-[#eaf8ea] text-[#1e822d] border border-[#d2f0d2]">
+                              <span>✓</span> Paid
+                            </span>
+                          )}
+                          {statusNormalized === "overdue" && (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-[#fef1f0] text-[#cf382b] border border-[#fbd6d3]">
+                              Overdue <span>ⓘ</span>
+                            </span>
+                          )}
+                          {statusNormalized === "pending" && (
+                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-[#fff7ed] text-[#c2641e] border border-[#fedec2]">
+                              Pending <span>ⓘ</span>
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>

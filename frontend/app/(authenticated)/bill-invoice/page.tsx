@@ -6,6 +6,7 @@ import Image from "next/image";
 import { getApiUrl, formatImageUrl, getAuthToken } from "@/lib/api";
 import { exportElementToPDF, generatePDFFile } from "@/lib/pdf";
 import InvoicePrintDocument from "@/components/invoice/InvoicePrintDocument";
+import ProductIllustration from "@/components/products/ProductIllustration";
 
 interface InvoiceItem {
   product_id?: string;
@@ -587,6 +588,8 @@ export default function BillInvoicePage() {
       const updated = [...items];
       updated[existingIndex] = {
         ...existing,
+        product_name: existing.product_name || selectedProductToAdd.name,
+        image: existing.image || (selectedProductToAdd.image ? formatImageUrl(selectedProductToAdd.image) : ""),
         quantity: newQty,
         total: newQty * existing.unit_price
       };
@@ -595,12 +598,14 @@ export default function BillInvoicePage() {
       const lineTotal = qty * selectedProductToAdd.price;
       const newItem: InvoiceItem = {
         product_id: selectedProductToAdd._id,
+        item_no: String(items.length + 1).padStart(2, "0"),
+        product_name: selectedProductToAdd.name,
         description: selectedProductToAdd.name,
         quantity: qty,
         unit_price: selectedProductToAdd.price,
         tax_rate: formTaxRate,
         total: lineTotal,
-        image: formatImageUrl(selectedProductToAdd.image)
+        image: selectedProductToAdd.image ? formatImageUrl(selectedProductToAdd.image) : ""
       };
       setItems([...items, newItem]);
     }
@@ -637,6 +642,33 @@ export default function BillInvoicePage() {
       total: newQty * item.unit_price
     };
     setItems(updated);
+  };
+
+  const getEnrichedItems = (invItems?: InvoiceItem[]): InvoiceItem[] => {
+    if (!invItems || invItems.length === 0) return [];
+    return invItems.map((it, idx) => {
+      let img = it.image || "";
+      const prodName = it.product_name || it.description || "";
+      if (!img && products.length > 0) {
+        const match = products.find(
+          (p) =>
+            (it.product_id && p._id === it.product_id) ||
+            p.name.toLowerCase() === prodName.toLowerCase() ||
+            p.name.toLowerCase().includes(prodName.toLowerCase()) ||
+            prodName.toLowerCase().includes(p.name.toLowerCase())
+        );
+        if (match?.image) {
+          img = formatImageUrl(match.image);
+        }
+      }
+      return {
+        ...it,
+        item_no: it.item_no || String(idx + 1).padStart(2, "0"),
+        product_name: prodName,
+        description: it.description || prodName,
+        image: img ? formatImageUrl(img) : ""
+      };
+    });
   };
 
   // -------------------------------------------------------------
@@ -773,7 +805,8 @@ export default function BillInvoicePage() {
 
         items: items.map((it) => ({
           ...it,
-          image: formatImageUrl(it.image),
+          product_name: it.product_name || it.description,
+          image: it.image ? formatImageUrl(it.image) : "",
         })),
         subtotal: calculations.subtotal,
         discount_amount: calculations.discount,
@@ -1582,19 +1615,23 @@ export default function BillInvoicePage() {
                       ) : (
                         items.map((it, idx) => (
                           <tr key={idx} className="hover:bg-gray-50/50">
-                            <td className="py-2.5 px-3 font-semibold text-gray-900 flex items-center gap-2">
-                              {it.image ? (
-                                <img
-                                  src={formatImageUrl(it.image)}
-                                  alt=""
-                                  crossOrigin="anonymous"
-                                  className="w-7 h-7 object-cover rounded border border-[#e2e8f0]"
-                                  onError={(e) => {
-                                    (e.target as HTMLElement).style.display = "none";
-                                  }}
-                                />
-                              ) : null}
-                              <span>{it.description}</span>
+                            <td className="py-2.5 px-3 font-semibold text-gray-900 flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 p-0.5 shrink-0 flex items-center justify-center overflow-hidden shadow-2xs">
+                                {it.image ? (
+                                  <img
+                                    src={formatImageUrl(it.image)}
+                                    alt=""
+                                    crossOrigin="anonymous"
+                                    className="w-full h-full object-contain"
+                                    onError={(e) => {
+                                      (e.target as HTMLElement).style.display = "none";
+                                    }}
+                                  />
+                                ) : (
+                                  <ProductIllustration name={it.product_name || it.description} className="w-full h-full" />
+                                )}
+                              </div>
+                              <span className="truncate">{it.product_name || it.description}</span>
                             </td>
                             <td className="py-2.5 px-3 text-right font-medium text-gray-700">
                               ₹{it.unit_price.toLocaleString("en-IN")}
@@ -1948,7 +1985,7 @@ export default function BillInvoicePage() {
               <table className="w-full text-left text-xs border border-[#e2e8f0] rounded-lg overflow-hidden">
                 <thead className="bg-gray-100 text-gray-600 font-bold uppercase text-[10px]">
                   <tr>
-                    <th className="py-2 px-3">Item Description</th>
+                    <th className="py-2 px-3">Product Item</th>
                     <th className="py-2 px-3 text-right">Rate</th>
                     <th className="py-2 px-3 text-center">Qty</th>
                     <th className="py-2 px-3 text-right">Amount</th>
@@ -1957,7 +1994,26 @@ export default function BillInvoicePage() {
                 <tbody className="divide-y divide-gray-100">
                   {items.map((it, idx) => (
                     <tr key={idx}>
-                      <td className="py-2.5 px-3 font-semibold text-gray-800">{it.description}</td>
+                      <td className="py-2.5 px-3 font-semibold text-gray-800">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 p-0.5 shrink-0 flex items-center justify-center overflow-hidden shadow-2xs">
+                            {it.image ? (
+                              <img
+                                src={formatImageUrl(it.image)}
+                                alt=""
+                                crossOrigin="anonymous"
+                                className="w-full h-full object-contain"
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = "none";
+                                }}
+                              />
+                            ) : (
+                              <ProductIllustration name={it.product_name || it.description} className="w-full h-full" />
+                            )}
+                          </div>
+                          <span>{it.product_name || it.description}</span>
+                        </div>
+                      </td>
                       <td className="py-2.5 px-3 text-right">₹{it.unit_price.toLocaleString("en-IN")}</td>
                       <td className="py-2.5 px-3 text-center font-bold">{it.quantity}</td>
                       <td className="py-2.5 px-3 text-right font-bold text-gray-900">
@@ -2135,7 +2191,7 @@ export default function BillInvoicePage() {
                     customer_gst: viewInvoice.customer_gst,
                     customer_address: viewInvoice.customer_address,
 
-                    items: viewInvoice.items,
+                    items: getEnrichedItems(viewInvoice.items),
 
                     subtotal: viewInvoice.subtotal ?? viewInvoice.amount,
                     discount_amount: viewInvoice.discount_amount ?? 0,

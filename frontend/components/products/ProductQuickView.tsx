@@ -9,6 +9,7 @@ import {
   getProductSku,
   getStockStatus
 } from "./types";
+import ProductIllustration from "./ProductIllustration";
 import {
   X,
   Pencil,
@@ -38,6 +39,11 @@ export default function ProductQuickView({
 }: ProductQuickViewProps) {
   const [copiedSku, setCopiedSku] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [imageError, setImageError] = useState(false);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [product?._id]);
 
   // Close on ESC key
   useEffect(() => {
@@ -126,21 +132,20 @@ export default function ProductQuickView({
         {/* Drawer Scrollable Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Main Large Image */}
-          <div className="relative w-full aspect-[4/3] rounded-2xl bg-slate-50 border border-slate-200/90 p-6 flex items-center justify-center overflow-hidden">
-            {imageUrl ? (
+          <div className="relative w-full aspect-[4/3] rounded-2xl bg-slate-50 border border-slate-200/90 flex items-center justify-center overflow-hidden">
+            {imageUrl && !imageError ? (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
                 src={imageUrl}
                 alt={product.name}
-                className="w-full h-full object-contain"
+                className="w-full h-full object-contain p-6"
+                onError={() => setImageError(true)}
               />
             ) : (
-              <div className="flex flex-col items-center justify-center text-slate-300">
-                <Package className="w-16 h-16 stroke-[1.2] mb-2" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  No Image Available
-                </span>
-              </div>
+              <ProductIllustration
+                name={product.name}
+                category={product.category}
+              />
             )}
 
             {/* Floating Stock Badge */}

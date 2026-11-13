@@ -13,6 +13,7 @@ import {
   ERP_UNITS,
   GST_RATES
 } from "@/components/products/types";
+import ProductIllustration from "@/components/products/ProductIllustration";
 import {
   ArrowLeft,
   Check,
@@ -49,6 +50,7 @@ function ProductDetailContent() {
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [copiedSku, setCopiedSku] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   // Image input options
   const [imageInputMode, setImageInputMode] = useState<"system" | "url">("system");
@@ -327,24 +329,20 @@ function ProductDetailContent() {
             </div>
 
             {/* Image Preview Box */}
-            <div className="relative w-full aspect-square rounded-2xl bg-white border border-slate-200/90 p-4 flex items-center justify-center overflow-hidden group shadow-2xs">
-              {imageUrl ? (
+            <div className="relative w-full aspect-square rounded-2xl bg-white border border-slate-200/90 flex items-center justify-center overflow-hidden group shadow-2xs">
+              {imageUrl && !imageError ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
                   src={imageUrl}
                   alt={formData.name}
-                  className="w-full h-full object-contain"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = "none";
-                  }}
+                  className="w-full h-full object-contain p-4"
+                  onError={() => setImageError(true)}
                 />
               ) : (
-                <div className="flex flex-col items-center justify-center text-slate-300">
-                  <Package className="w-16 h-16 stroke-[1.2] mb-1" />
-                  <span className="text-xs font-semibold text-slate-400">
-                    No image available
-                  </span>
-                </div>
+                <ProductIllustration
+                  name={formData.name}
+                  category={formData.category}
+                />
               )}
             </div>
 

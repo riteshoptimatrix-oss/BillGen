@@ -50,7 +50,7 @@ export default function ProductToolbar({
             type="text"
             value={filters.searchQuery}
             onChange={(e) => onFilterChange({ searchQuery: e.target.value })}
-            placeholder="Search by product name, SKU or specifications..."
+            placeholder="Search products by name or SKU..."
             className="w-full pl-10 pr-9 py-2.5 bg-slate-50/70 border border-slate-200/90 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-[#0260de] focus:ring-2 focus:ring-[#0260de]/10 transition-all font-medium"
           />
           {filters.searchQuery && (

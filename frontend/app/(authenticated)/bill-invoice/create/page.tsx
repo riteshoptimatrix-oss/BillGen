@@ -7,6 +7,7 @@ import Image from "next/image";
 import { getApiUrl, formatImageUrl } from "@/lib/api";
 import { exportElementToPDF } from "@/lib/pdf";
 import InvoicePrintDocument from "@/components/invoice/InvoicePrintDocument";
+import ProductIllustration from "@/components/products/ProductIllustration";
 
 interface InvoiceItem {
   product_id?: string;
@@ -1024,21 +1025,21 @@ export default function CreateInvoicePage() {
                       </td>
                       <td className="py-2.5 px-3 space-y-1.5">
                         <div className="flex items-center gap-2.5">
-                          {it.image ? (
-                            <img
-                              src={formatImageUrl(it.image)}
-                              alt=""
-                              crossOrigin="anonymous"
-                              className="w-9 h-9 rounded-lg object-cover border border-[#e2e8f0] shadow-xs flex-shrink-0"
-                              onError={(e) => {
-                                (e.target as HTMLElement).style.display = "none";
-                              }}
-                            />
-                          ) : (
-                            <div className="w-9 h-9 rounded-lg bg-gray-100 border border-[#e2e8f0] flex items-center justify-center text-xs flex-shrink-0">
-                              📦
-                            </div>
-                          )}
+                          <div className="w-9 h-9 rounded-lg bg-white border border-[#e2e8f0] shadow-xs flex-shrink-0 p-0.5 overflow-hidden flex items-center justify-center">
+                            {it.image ? (
+                              <img
+                                src={formatImageUrl(it.image)}
+                                alt=""
+                                crossOrigin="anonymous"
+                                className="w-full h-full object-contain"
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = "none";
+                                }}
+                              />
+                            ) : (
+                              <ProductIllustration name={it.product_name} className="w-full h-full" />
+                            )}
+                          </div>
                           <input
                             type="text"
                             value={it.product_name}
@@ -1344,16 +1345,27 @@ export default function CreateInvoicePage() {
                   customer_gst: clientGst,
                   customer_address: clientAddress,
 
-                  items: items.map((it) => ({
-                    product_id: it.product_id,
-                    item_no: it.item_no,
-                    product_name: it.product_name,
-                    description: it.description,
-                    quantity: it.quantity,
-                    unit_price: it.unit_price,
-                    total: it.total,
-                    image: it.image
-                  })),
+                  items: items.map((it) => {
+                    let img = it.image || "";
+                    if (!img && products.length > 0) {
+                      const match = products.find(
+                        (p) =>
+                          (it.product_id && p._id === it.product_id) ||
+                          p.name.toLowerCase() === (it.product_name || it.description || "").toLowerCase()
+                      );
+                      if (match?.image) img = formatImageUrl(match.image);
+                    }
+                    return {
+                      product_id: it.product_id,
+                      item_no: it.item_no,
+                      product_name: it.product_name,
+                      description: it.description,
+                      quantity: it.quantity,
+                      unit_price: it.unit_price,
+                      total: it.total,
+                      image: img ? formatImageUrl(img) : ""
+                    };
+                  }),
 
                   subtotal: calculations.subtotal,
                   discount_amount: discountAmount,

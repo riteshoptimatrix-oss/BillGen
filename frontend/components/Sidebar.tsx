@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { HardHat } from "lucide-react";
 
 // Crisp SVG Icons styled to match the reference image exactly
 const navIcons = {
@@ -24,11 +25,7 @@ const navIcons = {
     </svg>
   ),
   labour: (
-    <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 14a8 8 0 0116 0H4z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M2 17h20a1 1 0 001-1v-1a1 1 0 00-1-1H2a1 1 0 00-1 1v1a1 1 0 001 1z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v8" />
-    </svg>
+    <HardHat className="w-5 h-5 flex-shrink-0" strokeWidth={1.8} />
   ),
   customers: (
     <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>

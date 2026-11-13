@@ -1,15 +1,15 @@
 import asyncio
 from fastapi import APIRouter, Request, Depends
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime
-from security import get_current_user
+from security import get_optional_user
 
-router = APIRouter(prefix="/api/dashboard", tags=["dashboard"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 @router.get("/summary", response_description="Get dashboard summary data")
 async def get_dashboard_summary(
     request: Request,
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ) -> Dict[str, Any]:
     system_alerts = []
     db = request.app.mongodb
@@ -20,29 +20,33 @@ async def get_dashboard_summary(
         low_stock_products,
         invoices,
         recent_invoices_raw,
-        active_labours,
+        active_labours_count,
         labours,
-        expenses
+        expenses,
+        purchases
     ) = await asyncio.gather(
         # 1. Product count and low stock items (lean projection)
         db["products"].count_documents({}),
         db["products"].find({"stock": {"$lt": 10}}, {"_id": 1, "name": 1, "stock": 1}).limit(5).to_list(5),
         
-        # 2. Invoices summary (excluding heavy pdf_base64)
-        db["invoices"].find({}, {"_id": 1, "status": 1, "amount": 1, "client": 1}).to_list(1000),
+        # 2. Invoices summary with dates
+        db["invoices"].find({}, {"_id": 1, "status": 1, "amount": 1, "client": 1, "date": 1, "balance_due": 1}).to_list(2000),
         
-        # 3. Recent 5 invoices (lean projection)
+        # 3. Recent 5 invoices
         db["invoices"].find(
             {},
             {"_id": 1, "invoice_number": 1, "client": 1, "amount": 1, "status": 1, "date": 1}
         ).sort("_id", -1).limit(5).to_list(5),
         
         # 4. Labours count and salary list
-        db["labours"].count_documents({}),
-        db["labours"].find({}, {"_id": 1, "name": 1, "salary": 1}).to_list(1000),
+        db["labours"].count_documents({"status": {"$in": ["Active", "active"]}}),
+        db["labours"].find({}, {"_id": 1, "name": 1, "salary": 1, "status": 1}).to_list(1000),
         
-        # 5. Expenses list
-        db["expenses"].find({}, {"amount": 1}).to_list(1000)
+        # 5. Direct Expenses list
+        db["expenses"].find({}, {"amount": 1, "date": 1, "description": 1}).to_list(2000),
+
+        # 6. Purchases list
+        db["purchases"].find({}, {"amount": 1, "purchase_date": 1, "date": 1, "category": 1}).to_list(2000)
     )
 
     # 1. Low stock alerts
@@ -55,76 +59,127 @@ async def get_dashboard_summary(
             "actionText": "Restock"
         })
 
-    # 2. Overdue Invoices
-    total_revenue = 0
+    # 2. Invoices & Revenue Calculations
+    total_revenue = 0.0
     pending_bills = 0
+    now = datetime.now()
+    current_year = now.year
+    current_month_str = now.strftime("%Y-%m")
+
     for inv in invoices:
-        if inv.get("status") == "Paid":
-            total_revenue += inv.get("amount", 0)
+        amt = float(inv.get("amount", 0.0))
+        status = inv.get("status", "Pending")
+        if status == "Paid":
+            total_revenue += amt
         else:
             pending_bills += 1
-            if inv.get("status") == "Overdue":
+            if status == "Overdue":
                 system_alerts.append({
                     "id": f"inv-{inv['_id']}",
                     "type": "overdue",
-                    "title": f"Invoice {inv.get('client', 'Unknown')}",
-                    "subtitle": f"₹{inv.get('amount', 0):,} is Overdue",
+                    "title": f"Invoice: {inv.get('client', 'Unknown')}",
+                    "subtitle": f"₹{amt:,.0f} is Overdue",
                     "actionText": "Send Reminder"
                 })
 
+    # Format recent 5 invoices
     recent_invoices = []
-    current_year = datetime.now().year
     for inv in recent_invoices_raw:
         recent_invoices.append({
             "id": str(inv["_id"]),
             "invoice_number": inv.get("invoice_number", f"INV-{current_year}-{str(inv['_id'])[-4:].upper()}"),
-            "client": inv.get("client", "Unknown"),
-            "amount": inv.get("amount", 0),
+            "client": inv.get("client", "Unknown Customer"),
+            "amount": float(inv.get("amount", 0.0)),
             "status": inv.get("status", "Pending"),
             "date": inv.get("date", "")
         })
 
-    # 3. Labour Salary Due
-    total_salaries = 0
+    # 3. Labour Salary Calculations & Alerts
+    total_monthly_salaries = 0.0
     for labour in labours:
-        salary = labour.get("salary", 0)
-        total_salaries += salary
-        if salary > 0:
+        salary = float(labour.get("salary", 0.0))
+        total_monthly_salaries += salary
+        if salary > 0 and str(labour.get("status", "Active")).lower() == "active":
             system_alerts.append({
                 "id": f"labour-{labour['_id']}",
                 "type": "salary",
-                "title": f"Salary: {labour.get('name', 'Worker')}",
-                "subtitle": f"₹{salary:,} payment due",
+                "title": f"Payroll: {labour.get('name', 'Staff Member')}",
+                "subtitle": f"₹{salary:,.0f} monthly wage",
                 "actionText": "Pay Now"
             })
 
-    total_expenses = sum(exp.get("amount", 0) for exp in expenses)
-    net_profit = total_revenue - (total_expenses + total_salaries)
+    # 4. Expenses & Purchases Calculations
+    total_direct_expenses = sum(float(exp.get("amount", 0.0)) for exp in expenses)
+    total_purchases = sum(float(p.get("amount", 0.0)) for p in purchases)
+    total_expenses = total_direct_expenses + total_purchases
+    net_profit = total_revenue - (total_expenses + total_monthly_salaries)
 
-    chart_data = [
-        {"name": "Jan", "Revenue": 10000, "Expenses": 5000},
-        {"name": "Feb", "Revenue": 13000, "Expenses": 7000},
-        {"name": "Mar", "Revenue": 17000, "Expenses": 11000},
-        {"name": "Apr", "Revenue": 22000, "Expenses": 13000},
-        {"name": "May", "Revenue": 38000, "Expenses": 17000},
-        {"name": "Jun", "Revenue": 58000, "Expenses": 26500},
-    ]
+    # 5. Current Month Expenses (Purchases + Expenses for current month)
+    cur_month_expenses = 0.0
+    for exp in expenses:
+        exp_date = str(exp.get("date", ""))[:7]
+        if exp_date == current_month_str:
+            cur_month_expenses += float(exp.get("amount", 0.0))
+    for p in purchases:
+        p_date = str(p.get("purchase_date") or p.get("date") or "")[:7]
+        if p_date == current_month_str:
+            cur_month_expenses += float(p.get("amount", 0.0))
+    if total_monthly_salaries > 0:
+        cur_month_expenses += total_monthly_salaries
 
-    expense_distribution = [
-        {"name": "Material", "value": 45, "color": "#5c341f"},
-        {"name": "Labour", "value": 25, "color": "#c4733d"},
-        {"name": "Operations", "value": 15, "color": "#f3ceb2"},
-        {"name": "Others", "value": 15, "color": "#e8be9d"},
-    ]
+    # 6. Real Monthly Chart Data (12 Months of Current Year)
+    months_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    chart_data = []
+
+    for m_idx in range(1, 13):
+        m_str = f"{current_year}-{m_idx:02d}"
+        
+        # Month revenue
+        m_rev = sum(
+            float(inv.get("amount", 0.0))
+            for inv in invoices
+            if inv.get("status") == "Paid" and str(inv.get("date", ""))[:7] == m_str
+        )
+        
+        # Month expenses (direct expenses + purchases)
+        m_exp = sum(
+            float(exp.get("amount", 0.0))
+            for exp in expenses
+            if str(exp.get("date", ""))[:7] == m_str
+        ) + sum(
+            float(p.get("amount", 0.0))
+            for p in purchases
+            if str(p.get("purchase_date") or p.get("date") or "")[:7] == m_str
+        )
+
+        chart_data.append({
+            "name": months_names[m_idx - 1],
+            "Revenue": round(m_rev, 2),
+            "Expenses": round(m_exp, 2)
+        })
+
+    # 7. Real Expense Distribution
+    total_exp_pie = total_purchases + total_monthly_salaries + total_direct_expenses
+    if total_exp_pie > 0:
+        mat_pct = round((total_purchases / total_exp_pie) * 100)
+        lab_pct = round((total_monthly_salaries / total_exp_pie) * 100)
+        ops_pct = max(0, 100 - (mat_pct + lab_pct))
+        expense_distribution = [
+            {"name": "Material & Spares", "value": mat_pct, "color": "#0260de"},
+            {"name": "Labour & Staff", "value": lab_pct, "color": "#3b82f6"},
+            {"name": "Operations & Utilities", "value": ops_pct, "color": "#93c5fd"}
+        ]
+    else:
+        expense_distribution = []
 
     return {
         "kpis": {
-            "totalRevenue": total_revenue,
+            "totalRevenue": round(total_revenue, 2),
             "pendingBills": pending_bills,
             "totalProducts": products_count,
-            "netProfit": net_profit,
-            "activeLabours": active_labours,
-            "totalExpensesMonth": 26500
+            "netProfit": round(net_profit, 2),
+            "activeLabours": active_labours_count,
+            "totalExpensesMonth": round(cur_month_expenses, 2)
         },
         "chartData": chart_data,
         "expenseDistribution": expense_distribution,

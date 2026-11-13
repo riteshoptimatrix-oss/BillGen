@@ -1,7 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { formatImageUrl } from "@/lib/api";
+import ProductIllustration from "@/components/products/ProductIllustration";
 import {
   Calendar,
   FileText,
@@ -84,6 +85,43 @@ export interface InvoiceDocumentData {
 interface InvoicePrintDocumentProps {
   data: InvoiceDocumentData;
   id?: string;
+}
+
+function InvoiceProductCell({ it }: { it: InvoiceItemData }) {
+  const [imageError, setImageError] = useState(false);
+  const imageUrl = it.image ? formatImageUrl(it.image) : "";
+  const productName = it.product_name || it.description || "Automotive Component";
+
+  return (
+    <div className="flex items-center gap-3">
+      {/* Product Image Thumbnail (Consistent with Reference Design) */}
+      <div className="w-12 h-12 rounded-lg bg-white border border-slate-200/90 p-1 shrink-0 flex items-center justify-center overflow-hidden shadow-2xs">
+        {imageUrl && !imageError ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={imageUrl}
+            alt={productName}
+            crossOrigin="anonymous"
+            className="w-full h-full object-contain"
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <ProductIllustration name={productName} className="w-full h-full" />
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <h4 className="font-bold text-slate-900 text-xs leading-snug truncate">
+          {productName}
+        </h4>
+        {it.description && it.description.trim() !== productName.trim() && (
+          <p className="text-[10px] text-slate-500 truncate leading-tight mt-0.5">
+            {it.description}
+          </p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function InvoicePrintDocument({
@@ -510,37 +548,8 @@ export default function InvoicePrintDocument({
                     </td>
 
                     {/* Product Image + Name + Desc */}
-                    <td className="py-2 px-4 align-middle">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-lg bg-slate-50 border border-slate-200/90 p-1 shrink-0 flex items-center justify-center overflow-hidden">
-                          {it.image ? (
-                            /* eslint-disable-next-line @next/next/no-img-element */
-                            <img
-                              src={formatImageUrl(it.image)}
-                              alt=""
-                              crossOrigin="anonymous"
-                              className="w-full h-full object-contain"
-                              onError={(e) => {
-                                const target = e.target as HTMLElement;
-                                target.style.display = "none";
-                              }}
-                            />
-                          ) : (
-                            <span className="text-base">📦</span>
-                          )}
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <h4 className="font-bold text-slate-900 text-xs leading-snug truncate">
-                            {it.product_name || it.description}
-                          </h4>
-                          {it.description && (
-                            <p className="text-[10px] text-slate-500 truncate leading-tight mt-0.5">
-                              {it.description}
-                            </p>
-                          )}
-                        </div>
-                      </div>
+                    <td className="py-2.5 px-4 align-middle">
+                      <InvoiceProductCell it={it} />
                     </td>
 
                     {/* Unit Price */}
@@ -561,13 +570,21 @@ export default function InvoicePrintDocument({
                 ))
               ) : (
                 <tr>
-                  <td className="py-3 px-3 text-center font-bold text-slate-700">1</td>
-                  <td className="py-3 px-4 font-bold text-slate-900">
-                    Auto Rickshaw Chassis &amp; Component Assemblies
+                  <td className="py-2.5 px-3 text-center font-bold text-slate-700 align-middle">1</td>
+                  <td className="py-2.5 px-4 align-middle">
+                    <InvoiceProductCell
+                      it={{
+                        product_name: "Auto Rickshaw Chassis & Component Assemblies",
+                        description: "High-Performance 3-Wheeler Chassis Frame & Powertrain",
+                        quantity: 1,
+                        unit_price: grandTotal,
+                        total: grandTotal
+                      }}
+                    />
                   </td>
-                  <td className="py-3 px-4 text-right font-mono">{formatCurrency(grandTotal)}</td>
-                  <td className="py-3 px-3 text-center font-bold">1</td>
-                  <td className="py-3 px-4 text-right font-bold font-mono text-slate-900">
+                  <td className="py-2.5 px-4 text-right font-mono text-xs align-middle">{formatCurrency(grandTotal)}</td>
+                  <td className="py-2.5 px-3 text-center font-bold text-xs align-middle">1</td>
+                  <td className="py-2.5 px-4 text-right font-bold font-mono text-slate-900 text-xs align-middle">
                     {formatCurrency(grandTotal)}
                   </td>
                 </tr>
