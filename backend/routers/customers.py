@@ -1,12 +1,16 @@
 from fastapi import APIRouter, Body, Request, HTTPException, status, Depends
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any, Optional
-from models import Customer, CustomerCreate, CustomerUpdate
+import logging
+from models import Customer, CustomerCreate, CustomerUpdate, serialize_mongo_doc
 from bson import ObjectId
 from security import get_optional_user
 
+logger = logging.getLogger("customers")
+
 router = APIRouter(prefix="/api/customers", tags=["customers"], dependencies=[Depends(get_optional_user)])
 
+@router.post("", status_code=status.HTTP_201_CREATED, include_in_schema=False)
 @router.post("/", response_description="Add new customer", status_code=status.HTTP_201_CREATED)
 async def create_customer(
     request: Request,
@@ -19,17 +23,15 @@ async def create_customer(
         {"_id": new_customer.inserted_id}
     )
 
-    if created_customer:
-        created_customer["_id"] = str(created_customer["_id"])
-        created_customer["id"] = str(created_customer["_id"])
+    clean_cust = serialize_mongo_doc(created_customer) or {}
 
     # Real-Time Broadcast Notification
     try:
         from routers.notifications import broadcast_notification
-        c_name = created_customer.get("name", "Customer") if created_customer else "Customer"
+        c_name = clean_cust.get("name", "Customer")
         await broadcast_notification(
             request.app.mongodb,
-            title=f"New Customer Registered",
+            title="New Customer Registered",
             message=f"{c_name} added to party directory",
             type="customer",
             link="/customers"
@@ -37,15 +39,21 @@ async def create_customer(
     except Exception:
         pass
 
-    return created_customer or {}
+    return clean_cust
 
+@router.get("", include_in_schema=False)
 @router.get("/", response_description="List all customers")
 async def list_customers(request: Request) -> List[Dict[str, Any]]:
-    customers = await request.app.mongodb["customers"].find().sort("_id", -1).to_list(1000)
-    for c in customers:
-        c["_id"] = str(c["_id"])
-        c["id"] = str(c["_id"])
-    return customers
+    try:
+        customers = await request.app.mongodb["customers"].find().sort("_id", -1).to_list(1000)
+        return [serialize_mongo_doc(c) for c in customers if c]
+    except Exception as e:
+        logger.error(f"Error fetching customers: {e}", exc_info=True)
+        try:
+            customers = await request.app.mongodb["customers"].find().to_list(1000)
+            return [serialize_mongo_doc(c) for c in customers if c]
+        except Exception:
+            return []
 
 @router.get("/{id}", response_description="Get a single customer")
 async def show_customer(id: str, request: Request) -> Dict[str, Any]:
@@ -53,9 +61,7 @@ async def show_customer(id: str, request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="Invalid Customer ID format")
     customer = await request.app.mongodb["customers"].find_one({"_id": ObjectId(id)})
     if customer is not None:
-        customer["_id"] = str(customer["_id"])
-        customer["id"] = str(customer["_id"])
-        return customer
+        return serialize_mongo_doc(customer)
     raise HTTPException(status_code=404, detail=f"Customer {id} not found")
 
 @router.put("/{id}", response_description="Update a customer")
@@ -76,9 +82,7 @@ async def update_customer(
 
     updated_customer = await request.app.mongodb["customers"].find_one({"_id": ObjectId(id)})
     if updated_customer is not None:
-        updated_customer["_id"] = str(updated_customer["_id"])
-        updated_customer["id"] = str(updated_customer["_id"])
-        return updated_customer
+        return serialize_mongo_doc(updated_customer)
 
     raise HTTPException(status_code=404, detail=f"Customer {id} not found")
 

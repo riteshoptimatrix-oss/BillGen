@@ -3,6 +3,7 @@ from fastapi import APIRouter, Request, HTTPException, Body, Depends, status
 from typing import Dict, Any, List, Optional
 from bson import ObjectId
 from datetime import datetime
+from models import serialize_mongo_doc
 from security import get_optional_user
 
 router = APIRouter(prefix="/api/finance", tags=["finance"])
@@ -16,7 +17,7 @@ async def get_finance_overview(
     
     # Run invoices and purchases concurrently with lean projections
     invoices, purchases = await asyncio.gather(
-        db["invoices"].find({}, {"amount": 1, "status": 1, "date": 1}).to_list(2000),
+        db["invoices"].find({}, {"amount": 1, "status": 1, "date": 1, "amount_paid": 1, "balance_due": 1}).to_list(2000),
         db["purchases"].find({}, {"amount": 1, "status": 1, "purchase_date": 1, "date": 1}).to_list(2000)
     )
     
@@ -82,7 +83,7 @@ async def get_sales_records(
         if not inv_number:
             inv_number = f"INV-{current_year}-{inv_id[-4:].upper()}"
             
-        sales_records.append({
+        sales_records.append(serialize_mongo_doc({
             "id": inv_id,
             "invoice_number": inv_number,
             "customer_name": inv.get("client", "Unknown Customer"),
@@ -103,7 +104,7 @@ async def get_sales_records(
             "status": inv.get("status", "Pending"),
             "items": inv.get("items", []),
             "notes": inv.get("notes", "")
-        })
+        }))
         
     return sales_records
 

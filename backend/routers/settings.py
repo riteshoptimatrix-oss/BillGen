@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request, Body, Depends, HTTPException, status
 from typing import Dict, Any, Optional
+from models import serialize_mongo_doc
 from security import get_optional_user
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -47,6 +48,7 @@ DEFAULT_SETTINGS = {
     }
 }
 
+@router.get("", include_in_schema=False)
 @router.get("/", response_description="Get enterprise system settings")
 async def get_settings(
     request: Request,
@@ -54,17 +56,21 @@ async def get_settings(
 ) -> Dict[str, Any]:
     """Retrieve global settings from MongoDB; seed default record if none exists."""
     db = request.app.mongodb
-    settings = await db["settings"].find_one({"key": "global_enterprise_settings"}, {"_id": 0})
-    if not settings:
-        # Seed initial default settings in MongoDB
-        await db["settings"].update_one(
-            {"key": "global_enterprise_settings"},
-            {"$set": DEFAULT_SETTINGS},
-            upsert=True
-        )
+    try:
+        settings = await db["settings"].find_one({"key": "global_enterprise_settings"}, {"_id": 0})
+        if not settings:
+            # Seed initial default settings in MongoDB
+            await db["settings"].update_one(
+                {"key": "global_enterprise_settings"},
+                {"$set": DEFAULT_SETTINGS},
+                upsert=True
+            )
+            return DEFAULT_SETTINGS
+        return serialize_mongo_doc(settings) or DEFAULT_SETTINGS
+    except Exception:
         return DEFAULT_SETTINGS
-    return settings
 
+@router.put("", include_in_schema=False)
 @router.put("/", response_description="Update enterprise system settings")
 async def update_settings(
     request: Request,
@@ -86,6 +92,6 @@ async def update_settings(
     return {
         "success": True,
         "message": "Enterprise settings synchronized and saved in database.",
-        "settings": updated or clean_payload
+        "settings": serialize_mongo_doc(updated) or clean_payload
     }
 

@@ -101,7 +101,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="SiddhiVinayak Enterprise Billing API",
-    version="2.4",
+    version="2.5",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url=None  # Disable unnecessary secondary documentation surface
@@ -266,7 +266,7 @@ def read_root():
     return {
         "status": "online",
         "service": "SiddhiVinayak Enterprise Billing API",
-        "version": "2.4"
+        "version": "2.5"
     }
 
 @app.post("/api/auth/login", response_model=LoginResponse, tags=["auth"])
@@ -374,7 +374,7 @@ async def global_unhandled_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled server error on {request.method} {request.url.path}: {str(exc)}", exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": "An internal server error occurred. Our engineering team has been notified.", "error": True}
+        content={"detail": f"Server error: {str(exc)}", "error": True}
     )
 
 if __name__ == "__main__":

@@ -135,10 +135,11 @@ export default function SalaryModule({ initialLabours = [] }: { initialLabours?:
       const st = (l.status || "Active").toLowerCase();
       return st !== "inactive" && st !== "terminated";
     });
-    if (activeStaff.length === 0) return;
+    const staffToUse = activeStaff.length > 0 ? activeStaff : labourList;
+    if (staffToUse.length === 0) return;
 
     let totSalary = 0;
-    const genRecords: SalaryRecord[] = activeStaff.map((l: any, idx: number) => {
+    const genRecords: SalaryRecord[] = staffToUse.map((l: any, idx: number) => {
       const sal = Number(l.salary || 0);
       totSalary += sal;
       const lid = l._id || l.id || `lab_${idx}`;
@@ -229,6 +230,13 @@ export default function SalaryModule({ initialLabours = [] }: { initialLabours?:
   useEffect(() => {
     fetchSalaries();
   }, [fetchSalaries]);
+
+  // Reactive sync when parent loads workforce directory
+  useEffect(() => {
+    if (records.length === 0 && initialLabours && initialLabours.length > 0) {
+      populateFromLabourList(initialLabours);
+    }
+  }, [initialLabours, records.length, populateFromLabourList]);
 
   // Quick Toggle Paid / Pending directly from table
   const handleQuickToggleStatus = async (record: SalaryRecord) => {

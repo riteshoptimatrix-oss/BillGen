@@ -1,19 +1,20 @@
 from fastapi import APIRouter, Body, Request, HTTPException, status, Depends
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Any, Optional
-from models import Purchase, PurchaseCreate, PurchaseUpdate
+from models import Purchase, PurchaseCreate, PurchaseUpdate, serialize_mongo_doc
 from bson import ObjectId
 from datetime import datetime
 from security import get_optional_user
 
 router = APIRouter(prefix="/api/purchases", tags=["purchases"], dependencies=[Depends(get_optional_user)])
 
-@router.post("/", response_description="Add a new purchase entry", status_code=status.HTTP_201_CREATED, response_model=Purchase)
+@router.post("", status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@router.post("/", response_description="Add a new purchase entry", status_code=status.HTTP_201_CREATED)
 async def create_purchase(
     request: Request,
     purchase: PurchaseCreate = Body(...),
     user: Optional[Dict[str, Any]] = Depends(get_optional_user)
-):
+) -> Dict[str, Any]:
     purchase_dict = purchase.model_dump()
     
     if not purchase_dict.get("purchase_date"):
@@ -21,13 +22,14 @@ async def create_purchase(
         
     new_purchase = await request.app.mongodb["purchases"].insert_one(purchase_dict)
     created_purchase = await request.app.mongodb["purchases"].find_one({"_id": new_purchase.inserted_id})
+    clean_p = serialize_mongo_doc(created_purchase) or {}
 
     # Real-Time Broadcast Notification
     try:
         from routers.notifications import broadcast_notification
-        p_name = created_purchase.get("purchase_name", "Supplies")
-        supplier = created_purchase.get("supplier_name", "Supplier")
-        amt = created_purchase.get("amount", 0)
+        p_name = clean_p.get("purchase_name", "Supplies")
+        supplier = clean_p.get("supplier_name", "Supplier")
+        amt = clean_p.get("amount", 0)
         await broadcast_notification(
             request.app.mongodb,
             title=f"New Purchase: {p_name}",
@@ -38,16 +40,27 @@ async def create_purchase(
     except Exception:
         pass
 
-    return created_purchase
+    return clean_p
 
-@router.get("/", response_description="List all purchase entries", response_model=List[Purchase])
-async def list_purchases(request: Request):
-    purchases = await request.app.mongodb["purchases"].find().sort("_id", -1).to_list(1000)
-    return purchases
+@router.get("", include_in_schema=False)
+@router.get("/", response_description="List all purchase entries")
+async def list_purchases(request: Request) -> List[Dict[str, Any]]:
+    try:
+        purchases = await request.app.mongodb["purchases"].find().sort("_id", -1).to_list(1000)
+        return [serialize_mongo_doc(p) for p in purchases if p]
+    except Exception:
+        try:
+            purchases = await request.app.mongodb["purchases"].find().to_list(1000)
+            return [serialize_mongo_doc(p) for p in purchases if p]
+        except Exception:
+            return []
 
 @router.get("/summary", response_description="Get purchase statistics")
 async def purchase_summary(request: Request) -> Dict[str, Any]:
-    purchases = await request.app.mongodb["purchases"].find().to_list(1000)
+    try:
+        purchases = await request.app.mongodb["purchases"].find().to_list(1000)
+    except Exception:
+        purchases = []
     total_amount = sum(p.get("amount", 0) for p in purchases)
     paid_amount = sum(p.get("amount", 0) for p in purchases if p.get("status") == "Paid")
     pending_amount = sum(p.get("amount", 0) for p in purchases if p.get("status") in ["Pending", "Overdue"])
@@ -59,21 +72,21 @@ async def purchase_summary(request: Request) -> Dict[str, Any]:
         "count": len(purchases)
     }
 
-@router.get("/{id}", response_description="Get a single purchase entry", response_model=Purchase)
-async def show_purchase(id: str, request: Request):
+@router.get("/{id}", response_description="Get a single purchase entry")
+async def show_purchase(id: str, request: Request) -> Dict[str, Any]:
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Purchase ID format")
     if (purchase := await request.app.mongodb["purchases"].find_one({"_id": ObjectId(id)})) is not None:
-        return purchase
+        return serialize_mongo_doc(purchase)
     raise HTTPException(status_code=404, detail=f"Purchase {id} not found")
 
-@router.put("/{id}", response_description="Update a purchase entry", response_model=Purchase)
+@router.put("/{id}", response_description="Update a purchase entry")
 async def update_purchase(
     id: str,
     request: Request,
     purchase: PurchaseUpdate = Body(...),
     user: Optional[Dict[str, Any]] = Depends(get_optional_user)
-):
+) -> Dict[str, Any]:
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Purchase ID format")
         
@@ -85,7 +98,7 @@ async def update_purchase(
         )
 
     if (updated_purchase := await request.app.mongodb["purchases"].find_one({"_id": ObjectId(id)})) is not None:
-        return updated_purchase
+        return serialize_mongo_doc(updated_purchase)
 
     raise HTTPException(status_code=404, detail=f"Purchase {id} not found")
 

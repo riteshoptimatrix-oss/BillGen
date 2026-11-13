@@ -7,7 +7,7 @@ from fastapi import APIRouter, Body, Request, HTTPException, status, UploadFile,
 from fastapi.responses import JSONResponse
 import uuid
 from typing import List, Dict, Any, Optional
-from models import Invoice, InvoiceCreate, InvoiceUpdate, PaymentTransactionCreate
+from models import Invoice, InvoiceCreate, InvoiceUpdate, PaymentTransactionCreate, serialize_mongo_doc
 from bson import ObjectId
 from datetime import datetime
 
@@ -204,27 +204,38 @@ async def create_invoice(
     except Exception:
         pass
 
-    return created_invoice
+    return serialize_mongo_doc(created_invoice) or {}
 
+@router.get("", include_in_schema=False)
 @router.get("/", response_description="List all invoices", response_model=List[Dict[str, Any]])
 async def list_invoices(
     request: Request,
     user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ) -> List[Dict[str, Any]]:
     # CRITICAL PERFORMANCE BOOST: Exclude heavy pdf_base64 payload from list queries
-    invoices = await request.app.mongodb["invoices"].find({}, {"pdf_base64": 0}).sort("date", -1).sort("_id", -1).to_list(1000)
+    try:
+        invoices = await request.app.mongodb["invoices"].find({}, {"pdf_base64": 0}).sort([("date", -1), ("_id", -1)]).to_list(1000)
+    except Exception:
+        try:
+            invoices = await request.app.mongodb["invoices"].find({}, {"pdf_base64": 0}).to_list(1000)
+        except Exception:
+            return []
     
     current_year = datetime.now().year
-    for idx, inv in enumerate(invoices):
-        inv_id = str(inv["_id"])
+    clean_invoices = []
+    for inv in invoices:
+        inv = serialize_mongo_doc(inv)
+        if not inv:
+            continue
+        inv_id = str(inv.get("_id", ""))
         inv["id"] = inv_id
         inv["_id"] = inv_id
         if not inv.get("invoice_number"):
-            hex_suffix = inv_id[-4:].upper()
+            hex_suffix = inv_id[-4:].upper() if len(inv_id) >= 4 else "0001"
             inv["invoice_number"] = f"INV-{current_year}-{hex_suffix}"
             
-        tot = float(inv.get("amount", 0.0))
-        paid = float(inv.get("amount_paid", 0.0))
+        tot = float(inv.get("amount", 0.0) or 0.0)
+        paid = float(inv.get("amount_paid", 0.0) or 0.0)
         # If amount_paid is 0 but status was marked Paid, infer full payment
         if paid == 0.0 and inv.get("status") == "Paid" and tot > 0:
             paid = tot
@@ -241,7 +252,9 @@ async def list_invoices(
         elif paid > 0 and bal > 0:
             inv["status"] = "Partially Paid"
 
-    return invoices
+        clean_invoices.append(inv)
+
+    return clean_invoices
 
 @router.get("/{id}", response_description="Get a single invoice", response_model=Dict[str, Any])
 async def show_invoice(
@@ -252,29 +265,30 @@ async def show_invoice(
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Invoice ID format")
     if (invoice := await request.app.mongodb["invoices"].find_one({"_id": ObjectId(id)}, {"pdf_base64": 0})) is not None:
-        inv_id = str(invoice["_id"])
-        invoice["id"] = inv_id
-        invoice["_id"] = inv_id
-        if not invoice.get("invoice_number"):
-            invoice["invoice_number"] = f"INV-{datetime.now().year}-{inv_id[-4:].upper()}"
+        inv = serialize_mongo_doc(invoice)
+        inv_id = str(inv.get("_id", id))
+        inv["id"] = inv_id
+        inv["_id"] = inv_id
+        if not inv.get("invoice_number"):
+            inv["invoice_number"] = f"INV-{datetime.now().year}-{inv_id[-4:].upper()}"
         
-        tot = float(invoice.get("amount", 0.0))
-        paid = float(invoice.get("amount_paid", 0.0))
-        if paid == 0.0 and invoice.get("status") == "Paid" and tot > 0:
+        tot = float(inv.get("amount", 0.0) or 0.0)
+        paid = float(inv.get("amount_paid", 0.0) or 0.0)
+        if paid == 0.0 and inv.get("status") == "Paid" and tot > 0:
             paid = tot
-            invoice["amount_paid"] = paid
+            inv["amount_paid"] = paid
 
         bal = max(0.0, round(tot - paid, 2))
         pct = round((paid / tot * 100), 1) if tot > 0 else (100.0 if paid > 0 else 0.0)
-        invoice["balance_due"] = bal
-        invoice["paid_percentage"] = pct
+        inv["balance_due"] = bal
+        inv["paid_percentage"] = pct
 
         if bal <= 0 and paid > 0:
-            invoice["status"] = "Paid"
+            inv["status"] = "Paid"
         elif paid > 0 and bal > 0:
-            invoice["status"] = "Partially Paid"
+            inv["status"] = "Partially Paid"
 
-        return invoice
+        return inv
     raise HTTPException(status_code=404, detail=f"Invoice {id} not found")
 
 @router.put("/{id}", response_description="Update an invoice", response_model=Dict[str, Any])
@@ -295,14 +309,13 @@ async def update_invoice(
         )
 
     if (updated_invoice := await request.app.mongodb["invoices"].find_one({"_id": ObjectId(id)}, {"pdf_base64": 0})) is not None:
-        updated_invoice["id"] = str(updated_invoice["_id"])
-        updated_invoice["_id"] = str(updated_invoice["_id"])
+        clean_inv = serialize_mongo_doc(updated_invoice)
         if "status" in invoice_dict:
             try:
                 from routers.notifications import broadcast_notification
-                st = updated_invoice.get("status", "Updated")
-                inv_num = updated_invoice.get("invoice_number", f"INV-{id[-4:].upper()}")
-                client_name = updated_invoice.get("client", "Customer")
+                st = clean_inv.get("status", "Updated")
+                inv_num = clean_inv.get("invoice_number", f"INV-{id[-4:].upper()}")
+                client_name = clean_inv.get("client", "Customer")
                 await broadcast_notification(
                     request.app.mongodb,
                     title=f"Invoice Status: {inv_num}",
@@ -312,7 +325,7 @@ async def update_invoice(
                 )
             except Exception:
                 pass
-        return updated_invoice
+        return clean_inv
 
     raise HTTPException(status_code=404, detail=f"Invoice {id} not found")
 
@@ -419,15 +432,14 @@ async def record_invoice_payment(
     )
 
     updated_invoice = await db["invoices"].find_one({"_id": ObjectId(id)}, {"pdf_base64": 0})
-    updated_invoice["_id"] = str(updated_invoice["_id"])
-    updated_invoice["id"] = updated_invoice["_id"]
-    updated_invoice["paid_percentage"] = new_pct
+    clean_inv = serialize_mongo_doc(updated_invoice) or {}
+    clean_inv["paid_percentage"] = new_pct
 
     # Real-Time Broadcast Notification
     try:
         from routers.notifications import broadcast_notification
-        inv_num = updated_invoice.get("invoice_number", f"INV-{id[-4:].upper()}")
-        client_name = updated_invoice.get("client", "Customer")
+        inv_num = clean_inv.get("invoice_number", f"INV-{id[-4:].upper()}")
+        client_name = clean_inv.get("client", "Customer")
         await broadcast_notification(
             db,
             title=f"Payment Received: {inv_num}",
@@ -441,7 +453,7 @@ async def record_invoice_payment(
     return {
         "success": True,
         "message": f"Payment of ₹{payment_amt:,.2f} recorded successfully ({new_pct}% completed).",
-        "invoice": updated_invoice
+        "invoice": clean_inv
     }
 
 @router.delete("/{id}/payments/{payment_id}", response_description="Delete/revert a recorded payment")
@@ -493,13 +505,12 @@ async def delete_invoice_payment(
     )
 
     updated_invoice = await db["invoices"].find_one({"_id": ObjectId(id)}, {"pdf_base64": 0})
-    updated_invoice["_id"] = str(updated_invoice["_id"])
-    updated_invoice["id"] = updated_invoice["_id"]
-    updated_invoice["paid_percentage"] = new_pct
+    clean_inv = serialize_mongo_doc(updated_invoice) or {}
+    clean_inv["paid_percentage"] = new_pct
 
     return {
         "success": True,
         "message": "Payment transaction reverted successfully.",
-        "invoice": updated_invoice
+        "invoice": clean_inv
     }
 

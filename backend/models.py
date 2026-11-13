@@ -6,6 +6,39 @@ from pydantic.functional_validators import BeforeValidator
 # Helper for MongoDB ObjectId
 PyObjectId = Annotated[str, BeforeValidator(str)]
 
+def serialize_mongo_doc(doc: Any) -> Any:
+    """
+    Recursively converts MongoDB/BSON types (ObjectId, datetime, Decimal128)
+    into standard JSON-serializable Python data structures.
+    Guarantees both _id and id are accessible as strings.
+    """
+    if doc is None:
+        return None
+    if isinstance(doc, list):
+        return [serialize_mongo_doc(item) for item in doc]
+    if isinstance(doc, dict):
+        res = {}
+        for k, v in doc.items():
+            if k == "_id":
+                res["_id"] = str(v)
+                res["id"] = str(v)
+            elif hasattr(v, "__str__") and type(v).__name__ in ["ObjectId", "Decimal128"]:
+                res[k] = str(v)
+            elif hasattr(v, "isoformat"):
+                res[k] = v.isoformat()
+            elif isinstance(v, (dict, list)):
+                res[k] = serialize_mongo_doc(v)
+            else:
+                res[k] = v
+        if "_id" in res and "id" not in res:
+            res["id"] = res["_id"]
+        return res
+    if hasattr(doc, "__str__") and type(doc).__name__ in ["ObjectId", "Decimal128"]:
+        return str(doc)
+    if hasattr(doc, "isoformat"):
+        return doc.isoformat()
+    return doc
+
 # Indian Statutory Regulatory RegEx Patterns
 GSTIN_REGEX = re.compile(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$")
 MOBILE_REGEX = re.compile(r"^(?:\+91|0)?[6-9]\d{9}$")

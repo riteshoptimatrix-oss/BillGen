@@ -7,7 +7,7 @@ from fastapi.encoders import jsonable_encoder
 from bson import ObjectId
 import aiofiles
 
-from models import Product, ProductCreate, ProductUpdate
+from models import Product, ProductCreate, ProductUpdate, serialize_mongo_doc
 from security import get_optional_user, validate_uploaded_file
 
 router = APIRouter(prefix="/api/products", tags=["products"], dependencies=[Depends(get_optional_user)])
@@ -58,7 +58,8 @@ async def upload_image(
         "filename": unique_filename
     }
 
-@router.post("/", response_description="Add new product")
+@router.post("", status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@router.post("/", response_description="Add new product", status_code=status.HTTP_201_CREATED)
 async def create_product(
     request: Request,
     product: ProductCreate = Body(...),
@@ -70,15 +71,13 @@ async def create_product(
         {"_id": new_product.inserted_id}
     )
 
-    if created_product:
-        created_product["_id"] = str(created_product["_id"])
-        created_product["id"] = str(created_product["_id"])
+    clean_prod = serialize_mongo_doc(created_product) or {}
 
     # Real-Time Broadcast Notification
     try:
         from routers.notifications import broadcast_notification
-        p_name = created_product.get("name", "Product") if created_product else "Product"
-        stock_cnt = created_product.get("stock", 0) if created_product else 0
+        p_name = clean_prod.get("name", "Product")
+        stock_cnt = clean_prod.get("stock", 0)
         await broadcast_notification(
             request.app.mongodb,
             title=f"New Product Added: {p_name}",
@@ -89,15 +88,16 @@ async def create_product(
     except Exception:
         pass
 
-    return created_product or {}
+    return clean_prod
 
+@router.get("", include_in_schema=False)
 @router.get("/", response_description="List all products")
 async def list_products(request: Request) -> List[Dict[str, Any]]:
-    products = await request.app.mongodb["products"].find().to_list(1000)
-    for p in products:
-        p["_id"] = str(p["_id"])
-        p["id"] = str(p["_id"])
-    return products
+    try:
+        products = await request.app.mongodb["products"].find().to_list(1000)
+        return [serialize_mongo_doc(p) for p in products if p]
+    except Exception:
+        return []
 
 @router.get("/{id}", response_description="Get a single product")
 async def show_product(id: str, request: Request) -> Dict[str, Any]:
@@ -105,9 +105,7 @@ async def show_product(id: str, request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="Invalid Product ID format")
     product = await request.app.mongodb["products"].find_one({"_id": ObjectId(id)})
     if product is not None:
-        product["_id"] = str(product["_id"])
-        product["id"] = str(product["_id"])
-        return product
+        return serialize_mongo_doc(product)
     raise HTTPException(status_code=404, detail=f"Product {id} not found")
 
 @router.put("/{id}", response_description="Update a product")
@@ -129,9 +127,7 @@ async def update_product(
                 
     updated_product = await request.app.mongodb["products"].find_one({"_id": ObjectId(id)})
     if updated_product is not None:
-        updated_product["_id"] = str(updated_product["_id"])
-        updated_product["id"] = str(updated_product["_id"])
-        return updated_product
+        return serialize_mongo_doc(updated_product)
     raise HTTPException(status_code=404, detail=f"Product {id} not found")
 
 @router.delete("/{id}", response_description="Delete a product")

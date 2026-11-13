@@ -8,7 +8,7 @@ from bson import ObjectId
 import aiofiles
 
 from datetime import datetime
-from models import Labour, LabourCreate, LabourUpdate, SalaryUpdate
+from models import Labour, LabourCreate, LabourUpdate, SalaryUpdate, serialize_mongo_doc
 from security import get_optional_user, validate_uploaded_file
 
 router = APIRouter(prefix="/api/labours", tags=["labours"], dependencies=[Depends(get_optional_user)])
@@ -60,23 +60,28 @@ async def upload_image(
         "filename": unique_filename
     }
 
-@router.post("/", response_description="Add new labour", response_model=Labour)
+@router.post("", status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@router.post("/", response_description="Add new labour", status_code=status.HTTP_201_CREATED)
 async def create_labour(
     request: Request,
     labour: LabourCreate = Body(...),
     user: Optional[Dict[str, Any]] = Depends(get_optional_user)
-):
+) -> Dict[str, Any]:
     labour_dict = jsonable_encoder(labour)
     new_labour = await request.app.mongodb["labours"].insert_one(labour_dict)
     created_labour = await request.app.mongodb["labours"].find_one(
         {"_id": new_labour.inserted_id}
     )
-    return created_labour
+    return serialize_mongo_doc(created_labour) or {}
 
-@router.get("/", response_description="List all labours", response_model=List[Labour])
-async def list_labours(request: Request):
-    labours = await request.app.mongodb["labours"].find().to_list(1000)
-    return labours
+@router.get("", include_in_schema=False)
+@router.get("/", response_description="List all labours")
+async def list_labours(request: Request) -> List[Dict[str, Any]]:
+    try:
+        labours = await request.app.mongodb["labours"].find().to_list(1000)
+        return [serialize_mongo_doc(l) for l in labours if l]
+    except Exception:
+        return []
 
 # ==============================================================================
 # SALARY & PAYROLL MANAGEMENT MODULE
@@ -96,10 +101,23 @@ async def get_monthly_salaries(
     cur_year = year if year and year > 2000 else now.year
     
     db = request.app.mongodb
-    # Include all enrolled staff (excluding only explicitly inactive/terminated)
-    labours = await db["labours"].find({
-        "status": {"$nin": ["Inactive", "inactive", "Terminated", "terminated"]}
-    }).to_list(1000)
+    # Include all enrolled staff (fallback to all labours if filter empty)
+    try:
+        labours = await db["labours"].find({
+            "$or": [
+                {"status": {"$exists": False}},
+                {"status": None},
+                {"status": {"$nin": ["Inactive", "inactive", "Terminated", "terminated"]}}
+            ]
+        }).to_list(1000)
+    except Exception:
+        labours = []
+        
+    if not labours:
+        try:
+            labours = await db["labours"].find().to_list(1000)
+        except Exception:
+            labours = []
     
     # 1. Fetch existing salary records for the selected month & year
     existing_salaries = await db["salaries"].find({
@@ -348,39 +366,35 @@ async def get_labour_salary_history(
         "history": formatted
     }
 
-@router.get("/{id}", response_description="Get a single labour", response_model=Labour)
-async def show_labour(id: str, request: Request):
+@router.get("/{id}", response_description="Get a single labour")
+async def show_labour(id: str, request: Request) -> Dict[str, Any]:
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Labour ID format")
     labour = await request.app.mongodb["labours"].find_one({"_id": ObjectId(id)})
     if labour is not None:
-        return labour
+        return serialize_mongo_doc(labour)
     raise HTTPException(status_code=404, detail=f"Labour {id} not found")
 
-@router.put("/{id}", response_description="Update a labour", response_model=Labour)
+@router.put("/{id}", response_description="Update a labour")
 async def update_labour(
     id: str,
     request: Request,
     labour: LabourUpdate = Body(...),
     user: Optional[Dict[str, Any]] = Depends(get_optional_user)
-):
+) -> Dict[str, Any]:
     if not ObjectId.is_valid(id):
         raise HTTPException(status_code=400, detail="Invalid Labour ID format")
     
     labour_dict = {k: v for k, v in labour.model_dump().items() if v is not None}
     
     if len(labour_dict) >= 1:
-        update_result = await request.app.mongodb["labours"].update_one(
+        await request.app.mongodb["labours"].update_one(
             {"_id": ObjectId(id)}, {"$set": labour_dict}
         )
-        if update_result.modified_count == 1:
-            updated_labour = await request.app.mongodb["labours"].find_one({"_id": ObjectId(id)})
-            if updated_labour is not None:
-                return updated_labour
                 
     existing_labour = await request.app.mongodb["labours"].find_one({"_id": ObjectId(id)})
     if existing_labour is not None:
-        return existing_labour
+        return serialize_mongo_doc(existing_labour)
     raise HTTPException(status_code=404, detail=f"Labour {id} not found")
 
 @router.delete("/{id}", response_description="Delete a labour")

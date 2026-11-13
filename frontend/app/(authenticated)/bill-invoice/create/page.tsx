@@ -175,37 +175,51 @@ export default function CreateInvoicePage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Fetch initial data (customers, products, next invoice number)
+  // Fetch initial data (customers, products, next invoice number, settings)
   useEffect(() => {
     const fetchData = async () => {
-      try {
-        const token = getAuthToken();
-        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-        const [cRes, pRes, numRes, settingsRes] = await Promise.all([
-          fetch(`${apiUrl}/customers/`, { headers, credentials: "include" }),
-          fetch(`${apiUrl}/products/`, { headers, credentials: "include" }),
-          fetch(`${apiUrl}/invoices/next-number`, { headers, credentials: "include" }),
-          fetch(`${apiUrl}/settings`, { headers, credentials: "include" })
-        ]);
+      const token = getAuthToken();
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
+      // 1. Fetch Customers
+      try {
+        const cRes = await fetch(`${apiUrl}/customers/`, { headers, credentials: "include" });
         if (cRes.ok) {
           const custs = await cRes.json();
-          setCustomers(custs);
-          if (custs.length > 0) {
-            // Default first customer
-            handleCustomerSelect(custs[0]._id, custs);
+          setCustomers(custs || []);
+          if (custs && custs.length > 0) {
+            handleCustomerSelect(custs[0]._id || custs[0].id, custs);
           }
         }
+      } catch (err) {
+        console.error("Failed to load customers", err);
+      }
 
+      // 2. Fetch Products
+      try {
+        const pRes = await fetch(`${apiUrl}/products/`, { headers, credentials: "include" });
         if (pRes.ok) {
-          setProducts(await pRes.json());
+          const prods = await pRes.json();
+          setProducts(prods || []);
         }
+      } catch (err) {
+        console.error("Failed to load products", err);
+      }
 
+      // 3. Fetch Next Invoice Number
+      try {
+        const numRes = await fetch(`${apiUrl}/invoices/next-number`, { headers, credentials: "include" });
         if (numRes.ok) {
           const numData = await numRes.json();
           setInvoiceNumber(numData.next_number || `INV-${new Date().getFullYear()}-0001`);
         }
+      } catch (err) {
+        console.error("Failed to load next invoice number", err);
+      }
 
+      // 4. Fetch Settings
+      try {
+        const settingsRes = await fetch(`${apiUrl}/settings/`, { headers, credentials: "include" });
         if (settingsRes.ok) {
           const sData = await settingsRes.json();
           if (sData.bank) {
@@ -226,7 +240,7 @@ export default function CreateInvoicePage() {
           }
         }
       } catch (err) {
-        console.error("Failed to load initial data", err);
+        console.error("Failed to load settings", err);
       }
     };
 
@@ -918,102 +932,104 @@ export default function CreateInvoicePage() {
               </span>
             </div>
 
-            {/* Red Bordered Search Input from Screenshot */}
-            <div>
-              <input
-                type="text"
-                value={productSearch}
-                onChange={(e) => setProductSearch(e.target.value)}
-                placeholder="Search product inventory by name or description..."
-                className="w-full px-4 py-2.5 text-xs text-gray-800 bg-white border-2 border-red-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-200 placeholder-gray-400 font-medium transition-all"
-              />
-            </div>
+            {/* PRODUCT DROPDOWN & SEARCH BAR */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+              <div className="md:col-span-8">
+                <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                  Product Dropdown (Choose from Inventory) <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={selectedProductToAdd?._id || ""}
+                  onChange={(e) => {
+                    const found = products.find((p) => p._id === e.target.value);
+                    if (found) {
+                      handleSelectProduct(found);
+                    } else {
+                      setSelectedProductToAdd(null);
+                    }
+                  }}
+                  className="w-full px-3.5 py-2.5 text-xs bg-white border border-[#e2e8f0] rounded-xl font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
+                >
+                  <option value="">-- Choose Product from Inventory --</option>
+                  {products.map((prod) => (
+                    <option key={prod._id} value={prod._id}>
+                      {prod.name} — ₹{prod.price.toLocaleString("en-IN")} ({prod.stock} in stock)
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            {/* Product Cards Grid from Screenshot */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-72 overflow-y-auto p-1">
-              {filteredProductsList.map((prod) => {
-                const isSelected = selectedProductToAdd?._id === prod._id;
-                const isLowStock = prod.stock <= 10;
-                return (
-                  <div
-                    key={prod._id}
-                    onClick={() => handleSelectProduct(prod)}
-                    className={`flex items-center gap-3 p-3 bg-white border rounded-2xl cursor-pointer transition-all ${
-                      isSelected
-                        ? "border-[#0260de] ring-2 ring-red-100 shadow-md bg-red-50/20"
-                        : "border-[#e2e8f0]/90 hover:border-gray-300 hover:shadow-xs"
-                    }`}
-                  >
-                    <div className="w-12 h-12 rounded-xl bg-gray-50 border border-[#e2e8f0] flex items-center justify-center overflow-hidden flex-shrink-0">
-                      {prod.image ? (
-                        <img
-                          src={formatImageUrl(prod.image)}
-                          alt={prod.name}
-                          crossOrigin="anonymous"
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = "none";
-                          }}
-                        />
-                      ) : (
-                        <span className="text-gray-300 text-xs font-bold">📦</span>
-                      )}
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-xs font-bold text-gray-900 truncate" title={prod.name}>
-                        {prod.name}
-                      </h4>
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="text-xs font-black text-gray-900">
-                          ₹{prod.price.toLocaleString("en-IN")}
-                        </span>
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                            isLowStock
-                              ? "bg-rose-50 text-rose-600 border border-rose-200"
-                              : "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          }`}
-                        >
-                          {prod.stock} in stock
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              <div className="md:col-span-4">
+                <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                  Filter Catalog
+                </label>
+                <input
+                  type="text"
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  placeholder="Filter by name..."
+                  className="w-full px-3.5 py-2 text-xs text-gray-800 bg-white border border-[#e2e8f0] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de] placeholder-gray-400 font-medium"
+                />
+              </div>
             </div>
 
             {/* Quantity Selector & Add Button for Selected Product */}
             {selectedProductToAdd && (
-              <div className="p-3 bg-red-50/40 border border-red-200/70 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs animate-in fade-in duration-150">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#0260de]"></span>
-                  <span className="font-bold text-gray-800">Selected:</span>
-                  <span className="font-semibold text-gray-900">{selectedProductToAdd.name}</span>
-                  <span className="font-bold text-[#0260de]">
-                    (₹{selectedProductToAdd.price.toLocaleString("en-IN")})
-                  </span>
+              <div className="p-3.5 bg-blue-50/60 border border-blue-200 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs animate-in fade-in duration-150">
+                <div className="flex items-center gap-3">
+                  {selectedProductToAdd.image ? (
+                    <img
+                      src={formatImageUrl(selectedProductToAdd.image)}
+                      alt={selectedProductToAdd.name}
+                      crossOrigin="anonymous"
+                      className="w-10 h-10 object-cover rounded-xl border border-blue-200 bg-white shrink-0"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-xl bg-blue-100/70 border border-blue-200 flex items-center justify-center text-sm font-bold text-[#0260de] shrink-0">
+                      📦
+                    </div>
+                  )}
+
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-[#0260de]"></span>
+                      <span className="font-bold text-gray-900">{selectedProductToAdd.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="font-bold text-[#0260de]">
+                        ₹{selectedProductToAdd.price.toLocaleString("en-IN")}
+                      </span>
+                      <span
+                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                          selectedProductToAdd.stock <= 10
+                            ? "bg-rose-100 text-rose-700"
+                            : "bg-emerald-100 text-emerald-700"
+                        }`}
+                      >
+                        {selectedProductToAdd.stock} in stock
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <label className="text-[11px] font-bold text-gray-600">Qty:</label>
+                  <label className="text-[11px] font-bold text-gray-700">Quantity:</label>
                   <input
                     type="number"
                     min="1"
                     max={selectedProductToAdd.stock}
                     value={qtyToAdd}
                     onChange={(e) => handleQtyChange(Number(e.target.value))}
-                    className="w-16 px-2 py-1 bg-white border border-gray-300 rounded-lg text-xs font-bold text-center"
+                    className="w-16 px-2.5 py-1.5 bg-white border border-gray-300 rounded-xl text-xs font-bold text-center focus:outline-none focus:border-[#0260de]"
                   />
-                  <span className="font-bold text-gray-900 font-mono text-xs">
+                  <span className="font-bold text-gray-900 font-mono text-xs px-2">
                     = ₹{(selectedProductToAdd.price * qtyToAdd).toLocaleString("en-IN")}
                   </span>
                   <button
                     type="button"
                     disabled={qtyToAdd > selectedProductToAdd.stock}
                     onClick={handleAddItemToInvoice}
-                    className="px-4 py-1.5 bg-[#0260de] hover:bg-[#0252bf] text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-40 shadow-xs"
+                    className="px-4 py-2 bg-[#0260de] hover:bg-[#0252bf] text-white text-xs font-bold rounded-xl transition-all disabled:opacity-40 shadow-xs cursor-pointer"
                   >
                     + Add to Invoice
                   </button>
@@ -1027,6 +1043,66 @@ export default function CreateInvoicePage() {
                 <span>{stockWarning}</span>
               </div>
             )}
+
+            {/* Product Cards Grid */}
+            <div className="space-y-2 pt-1">
+              <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                Or Select from Product Cards:
+              </span>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-56 overflow-y-auto p-1">
+                {filteredProductsList.map((prod) => {
+                  const isSelected = selectedProductToAdd?._id === prod._id;
+                  const isLowStock = prod.stock <= 10;
+                  return (
+                    <div
+                      key={prod._id}
+                      onClick={() => handleSelectProduct(prod)}
+                      className={`flex items-center gap-3 p-3 bg-white border rounded-2xl cursor-pointer transition-all ${
+                        isSelected
+                          ? "border-[#0260de] ring-2 ring-blue-100 shadow-md bg-blue-50/20"
+                          : "border-[#e2e8f0]/90 hover:border-gray-300 hover:shadow-xs"
+                      }`}
+                    >
+                      <div className="w-12 h-12 rounded-xl bg-gray-50 border border-[#e2e8f0] flex items-center justify-center overflow-hidden flex-shrink-0">
+                        {prod.image ? (
+                          <img
+                            src={formatImageUrl(prod.image)}
+                            alt={prod.name}
+                            crossOrigin="anonymous"
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          <span className="text-gray-300 text-xs font-bold">📦</span>
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-xs font-bold text-gray-900 truncate" title={prod.name}>
+                          {prod.name}
+                        </h4>
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-xs font-black text-gray-900">
+                            ₹{prod.price.toLocaleString("en-IN")}
+                          </span>
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                              isLowStock
+                                ? "bg-rose-50 text-rose-600 border border-rose-200"
+                                : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            }`}
+                          >
+                            {prod.stock} in stock
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
             <div className="flex justify-between items-center pt-2">
               <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">

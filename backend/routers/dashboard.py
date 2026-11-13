@@ -30,12 +30,12 @@ async def get_dashboard_summary(
         db["products"].find({"stock": {"$lt": 10}}, {"_id": 1, "name": 1, "stock": 1}).limit(5).to_list(5),
         
         # 2. Invoices summary with dates
-        db["invoices"].find({}, {"_id": 1, "status": 1, "amount": 1, "client": 1, "date": 1, "balance_due": 1}).to_list(2000),
+        db["invoices"].find({}, {"_id": 1, "status": 1, "amount": 1, "client": 1, "date": 1, "balance_due": 1, "amount_paid": 1}).to_list(2000),
         
         # 3. Recent 5 invoices
         db["invoices"].find(
             {},
-            {"_id": 1, "invoice_number": 1, "client": 1, "amount": 1, "status": 1, "date": 1}
+            {"_id": 1, "invoice_number": 1, "client": 1, "amount": 1, "status": 1, "date": 1, "balance_due": 1, "amount_paid": 1}
         ).sort("_id", -1).limit(5).to_list(5),
         
         # 4. Labours count and salary list

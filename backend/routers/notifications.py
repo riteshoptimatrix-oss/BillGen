@@ -104,6 +104,7 @@ async def notification_stream(request: Request):
     )
 
 
+@router.get("", include_in_schema=False)
 @router.get("/")
 async def list_notifications(
     request: Request,

@@ -244,7 +244,8 @@ export default function BillInvoicePage() {
         throw new Error(errData.detail || "Failed to record payment");
       }
 
-      const updatedInvoice: Invoice = await res.json();
+      const resData = await res.json();
+      const updatedInvoice: Invoice = resData.invoice || resData;
       setInvoices((prev) =>
         prev.map((inv) => ((inv._id || inv.id) === invId ? updatedInvoice : inv))
       );
@@ -284,7 +285,8 @@ export default function BillInvoicePage() {
         throw new Error(errData.detail || "Failed to delete payment");
       }
 
-      const updatedInvoice: Invoice = await res.json();
+      const resData = await res.json();
+      const updatedInvoice: Invoice = resData.invoice || resData;
       setInvoices((prev) =>
         prev.map((inv) => ((inv._id || inv.id) === invId ? updatedInvoice : inv))
       );
