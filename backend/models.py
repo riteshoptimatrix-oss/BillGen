@@ -236,13 +236,8 @@ class InvoiceBase(BaseModel):
                 data["client"] = data["customer_name"]
             if not data.get("date") and data.get("invoice_date"):
                 data["date"] = data["invoice_date"]
-            if "amount" not in data or data.get("amount") is None:
-                if "grand_total" in data:
-                    data["amount"] = data["grand_total"]
-                elif "subtotal" in data:
-                    data["amount"] = data["subtotal"]
-                else:
-                    data["amount"] = 0.0
+            if "grand_total" in data and ("amount" not in data or data.get("amount") is None):
+                data["amount"] = data["grand_total"]
         return data
 
 class InvoiceCreate(InvoiceBase):
@@ -317,13 +312,8 @@ class InvoiceUpdate(BaseModel):
                 data["client"] = data["customer_name"]
             if not data.get("date") and data.get("invoice_date"):
                 data["date"] = data["invoice_date"]
-            if "amount" not in data or data.get("amount") is None:
-                if "grand_total" in data:
-                    data["amount"] = data["grand_total"]
-                elif "subtotal" in data:
-                    data["amount"] = data["subtotal"]
-                else:
-                    data["amount"] = 0.0
+            if "grand_total" in data and ("amount" not in data or data.get("amount") is None):
+                data["amount"] = data["grand_total"]
         return data
 
 class Invoice(InvoiceBase):

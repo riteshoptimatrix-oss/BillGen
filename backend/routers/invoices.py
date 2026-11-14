@@ -235,6 +235,22 @@ async def list_invoices(
             inv["invoice_number"] = f"INV-{current_year}-{hex_suffix}"
             
         tot = float(inv.get("amount", 0.0) or 0.0)
+        if tot <= 0.0:
+            calc_sub = float(inv.get("subtotal", 0.0) or 0.0)
+            calc_tax = float(inv.get("cgst_amount", 0.0) or 0.0) + float(inv.get("sgst_amount", 0.0) or 0.0) + float(inv.get("igst_amount", 0.0) or 0.0)
+            calc_disc = float(inv.get("discount_amount", 0.0) or 0.0)
+            recovered = round(calc_sub - calc_disc + calc_tax, 2)
+            if recovered > 0:
+                tot = recovered
+                inv["amount"] = tot
+                try:
+                    await request.app.mongodb["invoices"].update_one(
+                        {"_id": ObjectId(inv_id)},
+                        {"$set": {"amount": tot}}
+                    )
+                except Exception:
+                    pass
+
         paid = float(inv.get("amount_paid", 0.0) or 0.0)
         # If amount_paid is 0 but status was marked Paid, infer full payment
         if paid == 0.0 and inv.get("status") == "Paid" and tot > 0:
@@ -251,6 +267,8 @@ async def list_invoices(
             inv["status"] = "Paid"
         elif paid > 0 and bal > 0:
             inv["status"] = "Partially Paid"
+        elif paid == 0:
+            inv["status"] = "Pending"
 
         clean_invoices.append(inv)
 
@@ -273,6 +291,15 @@ async def show_invoice(
             inv["invoice_number"] = f"INV-{datetime.now().year}-{inv_id[-4:].upper()}"
         
         tot = float(inv.get("amount", 0.0) or 0.0)
+        if tot <= 0.0:
+            calc_sub = float(inv.get("subtotal", 0.0) or 0.0)
+            calc_tax = float(inv.get("cgst_amount", 0.0) or 0.0) + float(inv.get("sgst_amount", 0.0) or 0.0) + float(inv.get("igst_amount", 0.0) or 0.0)
+            calc_disc = float(inv.get("discount_amount", 0.0) or 0.0)
+            recovered = round(calc_sub - calc_disc + calc_tax, 2)
+            if recovered > 0:
+                tot = recovered
+                inv["amount"] = tot
+
         paid = float(inv.get("amount_paid", 0.0) or 0.0)
         if paid == 0.0 and inv.get("status") == "Paid" and tot > 0:
             paid = tot
@@ -287,6 +314,8 @@ async def show_invoice(
             inv["status"] = "Paid"
         elif paid > 0 and bal > 0:
             inv["status"] = "Partially Paid"
+        elif paid == 0:
+            inv["status"] = "Pending"
 
         return inv
     raise HTTPException(status_code=404, detail=f"Invoice {id} not found")
@@ -305,7 +334,21 @@ async def update_invoice(
 
     if len(invoice_dict) >= 1:
         existing_inv = await request.app.mongodb["invoices"].find_one({"_id": ObjectId(id)})
-        tot = float(invoice_dict.get("amount", existing_inv.get("amount", 0.0) if existing_inv else 0.0))
+        
+        # Robustly determine invoice total:
+        if "amount" in invoice_dict and invoice_dict["amount"] is not None and float(invoice_dict["amount"]) > 0:
+            tot = float(invoice_dict["amount"])
+        else:
+            tot = float(existing_inv.get("amount", 0.0) if existing_inv else 0.0)
+            if tot <= 0.0 and existing_inv:
+                calc_sub = float(existing_inv.get("subtotal", 0.0) or 0.0)
+                calc_tax = float(existing_inv.get("cgst_amount", 0.0) or 0.0) + float(existing_inv.get("sgst_amount", 0.0) or 0.0) + float(existing_inv.get("igst_amount", 0.0) or 0.0)
+                calc_disc = float(existing_inv.get("discount_amount", 0.0) or 0.0)
+                recovered = round(calc_sub - calc_disc + calc_tax, 2)
+                if recovered > 0:
+                    tot = recovered
+            invoice_dict["amount"] = tot
+
         paid = float(invoice_dict.get("amount_paid", existing_inv.get("amount_paid", 0.0) if existing_inv else 0.0))
         bal = max(0.0, round(tot - paid, 2))
         pct = round((paid / tot * 100), 1) if tot > 0 else (100.0 if paid > 0 else 0.0)
@@ -398,6 +441,17 @@ async def record_invoice_payment(
         raise HTTPException(status_code=404, detail="Invoice not found")
         
     invoice_total = float(invoice.get("amount", 0.0))
+    if invoice_total <= 0.0:
+        calc_sub = float(invoice.get("subtotal", 0.0) or 0.0)
+        calc_tax = float(invoice.get("cgst_amount", 0.0) or 0.0) + float(invoice.get("sgst_amount", 0.0) or 0.0) + float(invoice.get("igst_amount", 0.0) or 0.0)
+        calc_disc = float(invoice.get("discount_amount", 0.0) or 0.0)
+        recovered = round(calc_sub - calc_disc + calc_tax, 2)
+        if recovered > 0:
+            invoice_total = recovered
+            try:
+                await db["invoices"].update_one({"_id": ObjectId(id)}, {"$set": {"amount": invoice_total}})
+            except Exception:
+                pass
     current_paid = float(invoice.get("amount_paid", 0.0))
     remaining_balance = max(0.0, round(invoice_total - current_paid, 2))
 
@@ -493,6 +547,17 @@ async def delete_invoice_payment(
         raise HTTPException(status_code=404, detail="Payment transaction not found")
 
     invoice_total = float(invoice.get("amount", 0.0))
+    if invoice_total <= 0.0:
+        calc_sub = float(invoice.get("subtotal", 0.0) or 0.0)
+        calc_tax = float(invoice.get("cgst_amount", 0.0) or 0.0) + float(invoice.get("sgst_amount", 0.0) or 0.0) + float(invoice.get("igst_amount", 0.0) or 0.0)
+        calc_disc = float(invoice.get("discount_amount", 0.0) or 0.0)
+        recovered = round(calc_sub - calc_disc + calc_tax, 2)
+        if recovered > 0:
+            invoice_total = recovered
+            try:
+                await db["invoices"].update_one({"_id": ObjectId(id)}, {"$set": {"amount": invoice_total}})
+            except Exception:
+                pass
     new_paid = round(sum(float(p.get("amount", 0.0)) for p in filtered_payments), 2)
     new_balance = max(0.0, round(invoice_total - new_paid, 2))
     new_pct = round((new_paid / invoice_total * 100), 1) if invoice_total > 0 else 0.0

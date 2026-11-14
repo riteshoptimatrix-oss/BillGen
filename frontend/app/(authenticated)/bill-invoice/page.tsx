@@ -198,11 +198,30 @@ export default function BillInvoicePage() {
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   const [isDeletingPaymentId, setIsDeletingPaymentId] = useState<string | null>(null);
 
+  const getInvoiceTotal = (inv: Invoice | null | undefined): number => {
+    if (!inv) return 0;
+    if (inv.amount && Number(inv.amount) > 0) return Number(inv.amount);
+    const sub = Number(inv.subtotal || 0) - Number(inv.discount_amount || 0);
+    const tax = Number(inv.cgst_amount || 0) + Number(inv.sgst_amount || 0) + Number(inv.igst_amount || 0);
+    const recovered = sub + tax;
+    if (recovered > 0) return Math.round(recovered * 100) / 100;
+    if (inv.items && inv.items.length > 0) {
+      const itemsSum = inv.items.reduce(
+        (s, it) => s + (Number(it.total) || (Number(it.quantity) || 1) * (Number(it.unit_price) || 0)),
+        0
+      );
+      if (itemsSum > 0) return Math.round(itemsSum * 100) / 100;
+    }
+    return Number(inv.amount || 0);
+  };
+
   const openPaymentModal = (inv: Invoice) => {
     setPaymentModalInvoice(inv);
-    const total = inv.amount || 0;
+    const total = getInvoiceTotal(inv);
     const paid = inv.amount_paid ?? (inv.status === "Paid" ? total : 0);
-    const bal = inv.balance_due ?? (inv.status === "Paid" ? 0 : Math.max(0, total - paid));
+    const bal = inv.balance_due !== undefined && inv.balance_due !== null && (inv.status !== "Paid" || paid < total)
+      ? inv.balance_due
+      : Math.max(0, total - paid);
     
     // Set adjustment initial state
     setAdjustAmountPaid(paid.toString());
@@ -227,9 +246,11 @@ export default function BillInvoicePage() {
   const handlePayPercentChange = (pctStr: string, basisOverride?: "balance" | "total") => {
     setPayPercent(pctStr);
     if (!paymentModalInvoice) return;
-    const total = paymentModalInvoice.amount || 0;
+    const total = getInvoiceTotal(paymentModalInvoice);
     const paid = paymentModalInvoice.amount_paid ?? (paymentModalInvoice.status === "Paid" ? total : 0);
-    const bal = paymentModalInvoice.balance_due ?? (paymentModalInvoice.status === "Paid" ? 0 : Math.max(0, total - paid));
+    const bal = paymentModalInvoice.balance_due !== undefined && paymentModalInvoice.balance_due !== null && (paymentModalInvoice.status !== "Paid" || paid < total)
+      ? paymentModalInvoice.balance_due
+      : Math.max(0, total - paid);
     const basis = basisOverride || percentBasis;
     const basisAmt = basis === "total" ? total : (bal > 0 ? bal : total);
 
@@ -247,9 +268,11 @@ export default function BillInvoicePage() {
   const handlePayAmountChange = (amtStr: string) => {
     setPayAmount(amtStr);
     if (!paymentModalInvoice) return;
-    const total = paymentModalInvoice.amount || 0;
+    const total = getInvoiceTotal(paymentModalInvoice);
     const paid = paymentModalInvoice.amount_paid ?? (paymentModalInvoice.status === "Paid" ? total : 0);
-    const bal = paymentModalInvoice.balance_due ?? (paymentModalInvoice.status === "Paid" ? 0 : Math.max(0, total - paid));
+    const bal = paymentModalInvoice.balance_due !== undefined && paymentModalInvoice.balance_due !== null && (paymentModalInvoice.status !== "Paid" || paid < total)
+      ? paymentModalInvoice.balance_due
+      : Math.max(0, total - paid);
     const basisAmt = percentBasis === "total" ? total : (bal > 0 ? bal : total);
 
     const amt = parseFloat(amtStr);
@@ -264,7 +287,7 @@ export default function BillInvoicePage() {
   const handleAdjustPercentChange = (pctStr: string) => {
     setAdjustPercent(pctStr);
     if (!paymentModalInvoice) return;
-    const total = paymentModalInvoice.amount || 0;
+    const total = getInvoiceTotal(paymentModalInvoice);
     const pct = parseFloat(pctStr);
     if (!isNaN(pct) && pct >= 0 && total > 0) {
       const clampedPct = Math.min(100, Math.max(0, pct));
@@ -278,7 +301,7 @@ export default function BillInvoicePage() {
   const handleAdjustAmountChange = (amtStr: string) => {
     setAdjustAmountPaid(amtStr);
     if (!paymentModalInvoice) return;
-    const total = paymentModalInvoice.amount || 0;
+    const total = getInvoiceTotal(paymentModalInvoice);
     const amt = parseFloat(amtStr);
     if (!isNaN(amt) && amt >= 0 && total > 0) {
       const clampedAmt = Math.min(total, amt);
@@ -293,7 +316,7 @@ export default function BillInvoicePage() {
     e.preventDefault();
     if (!paymentModalInvoice) return;
     const invId = (paymentModalInvoice._id || paymentModalInvoice.id) as string;
-    const total = paymentModalInvoice.amount || 0;
+    const total = getInvoiceTotal(paymentModalInvoice);
     const newPaid = Math.min(total, Math.max(0, parseFloat(adjustAmountPaid) || 0));
 
     try {
@@ -308,6 +331,7 @@ export default function BillInvoicePage() {
         headers,
         credentials: "include",
         body: JSON.stringify({
+          amount: total,
           amount_paid: newPaid
         })
       });
@@ -322,7 +346,8 @@ export default function BillInvoicePage() {
         prev.map((inv) => ((inv._id || inv.id) === invId ? updatedInvoice : inv))
       );
       setPaymentModalInvoice(updatedInvoice);
-      const newBal = updatedInvoice.balance_due ?? Math.max(0, (updatedInvoice.amount || 0) - (updatedInvoice.amount_paid || 0));
+      const updatedTotal = getInvoiceTotal(updatedInvoice);
+      const newBal = updatedInvoice.balance_due ?? Math.max(0, updatedTotal - (updatedInvoice.amount_paid || 0));
       setPayAmount(newBal > 0 ? newBal.toString() : "");
       setPayPercent(newBal > 0 ? "100" : "");
       setAdjustAmountPaid(newPaid.toString());
@@ -339,9 +364,11 @@ export default function BillInvoicePage() {
     e.preventDefault();
     if (!paymentModalInvoice) return;
     const invId = (paymentModalInvoice._id || paymentModalInvoice.id) as string;
-    const totalAmount = paymentModalInvoice.amount || 0;
+    const totalAmount = getInvoiceTotal(paymentModalInvoice);
     const currentPaid = paymentModalInvoice.amount_paid ?? (paymentModalInvoice.status === "Paid" ? totalAmount : 0);
-    const remainingBalance = paymentModalInvoice.balance_due ?? (paymentModalInvoice.status === "Paid" ? 0 : Math.max(0, totalAmount - currentPaid));
+    const remainingBalance = paymentModalInvoice.balance_due !== undefined && paymentModalInvoice.balance_due !== null && (paymentModalInvoice.status !== "Paid" || currentPaid < totalAmount)
+      ? paymentModalInvoice.balance_due
+      : Math.max(0, totalAmount - currentPaid);
 
     const enteredAmt = parseFloat(payAmount);
     if (isNaN(enteredAmt) || enteredAmt <= 0) {
@@ -756,37 +783,66 @@ export default function BillInvoicePage() {
       const res = await fetch(`${apiUrl}/invoices/`, { headers, credentials: "include" });
       if (res.ok) {
         const data = await res.json();
-        setInvoices(data);
+        const mapped: Invoice[] = data.map((s: any) => {
+          const calcTax = (Number(s.cgst_amount) || 0) + (Number(s.sgst_amount) || 0) + (Number(s.igst_amount) || 0);
+          const calcSub = (Number(s.subtotal) || 0) - (Number(s.discount_amount) || 0);
+          const recovered = (calcSub + calcTax) > 0 ? (calcSub + calcTax) : 0;
+          const tot = Number(s.amount) > 0 ? Number(s.amount) : (recovered > 0 ? recovered : 0);
+          const paid = Number(s.amount_paid || 0);
+          const bal = s.balance_due !== undefined && s.balance_due !== null ? Number(s.balance_due) : Math.max(0, tot - paid);
+          const pct = tot > 0 ? Math.min(100, Math.round((paid / tot) * 100)) : 0;
+          let st = s.status || "Pending";
+          if (bal <= 0 && paid > 0) st = "Paid";
+          else if (paid > 0 && bal > 0) st = "Partially Paid";
+          else if (paid === 0) st = "Pending";
+
+          return {
+            ...s,
+            amount: tot,
+            amount_paid: paid,
+            balance_due: bal,
+            paid_percentage: pct,
+            status: st
+          };
+        });
+        setInvoices(mapped);
         return;
       }
       // Resilient fallback: If /invoices/ returns non-200, load from /finance/sales which reads the exact same collection
       const salesRes = await fetch(`${apiUrl}/finance/sales`, { headers, credentials: "include" });
       if (salesRes.ok) {
         const salesData = await salesRes.json();
-        const mapped: Invoice[] = salesData.map((s: any) => ({
-          _id: s.id || s._id,
-          id: s.id || s._id,
-          invoice_number: s.invoice_number,
-          client: s.customer_name || s.client || "Unknown",
-          customer_phone: s.customer_phone || "",
-          customer_gst: s.customer_gst || "",
-          date: s.date || "",
-          due_date: s.due_date || "",
-          amount: Number(s.amount || 0),
-          amount_paid: Number(s.amount_paid || 0),
-          balance_due: Number(s.balance_due || 0),
-          paid_percentage: s.amount ? Math.round((Number(s.amount_paid || 0) / Number(s.amount)) * 100) : 0,
-          status: s.status || "Pending",
-          items: s.items || [],
-          notes: s.notes || "",
-          subtotal: s.subtotal,
-          discount_amount: s.discount_amount,
-          taxable_amount: s.taxable_amount,
-          tax_percent: s.tax_percent,
-          cgst_amount: s.cgst_amount,
-          sgst_amount: s.sgst_amount,
-          igst_amount: s.igst_amount
-        }));
+        const mapped: Invoice[] = salesData.map((s: any) => {
+          const calcTax = (Number(s.cgst_amount) || 0) + (Number(s.sgst_amount) || 0) + (Number(s.igst_amount) || 0);
+          const calcSub = (Number(s.subtotal) || 0) - (Number(s.discount_amount) || 0);
+          const recovered = (calcSub + calcTax) > 0 ? (calcSub + calcTax) : 0;
+          const tot = Number(s.amount) > 0 ? Number(s.amount) : (recovered > 0 ? recovered : 0);
+          const paid = Number(s.amount_paid || 0);
+          const bal = s.balance_due !== undefined && s.balance_due !== null ? Number(s.balance_due) : Math.max(0, tot - paid);
+          const pct = tot > 0 ? Math.min(100, Math.round((paid / tot) * 100)) : 0;
+          let st = s.status || "Pending";
+          if (bal <= 0 && paid > 0) st = "Paid";
+          else if (paid > 0 && bal > 0) st = "Partially Paid";
+          else if (paid === 0) st = "Pending";
+
+          return {
+            _id: s.id || s._id,
+            id: s.id || s._id,
+            invoice_number: s.invoice_number,
+            client: s.customer_name || s.client || "Unknown",
+            customer_phone: s.customer_phone || "",
+            customer_gst: s.customer_gst || "",
+            date: s.date || "",
+            due_date: s.due_date || "",
+            amount: tot,
+            amount_paid: paid,
+            balance_due: bal,
+            paid_percentage: pct,
+            status: st,
+            items: s.items || [],
+            notes: s.notes || ""
+          };
+        });
         setInvoices(mapped);
       }
     } catch (err) {
@@ -1327,13 +1383,20 @@ export default function BillInvoicePage() {
     });
   }, [invoices, searchQuery, statusFilter]);
 
-  const totalInvoicedRevenue = invoices.reduce((sum, i) => sum + (i.amount || 0), 0);
+  const totalInvoicedRevenue = invoices.reduce((sum, i) => sum + (getInvoiceTotal(i) || 0), 0);
   const totalPaidRevenue = invoices.reduce(
-    (sum, i) => sum + (i.amount_paid !== undefined ? i.amount_paid : (i.status === "Paid" ? (i.amount || 0) : 0)),
+    (sum, i) => {
+      const tot = getInvoiceTotal(i);
+      return sum + (i.amount_paid !== undefined ? i.amount_paid : (i.status === "Paid" ? tot : 0));
+    },
     0
   );
   const totalPendingBalance = invoices.reduce(
-    (sum, i) => sum + (i.balance_due !== undefined ? i.balance_due : (i.status !== "Paid" ? (i.amount || 0) : 0)),
+    (sum, i) => {
+      const tot = getInvoiceTotal(i);
+      const paid = i.amount_paid !== undefined ? i.amount_paid : (i.status === "Paid" ? tot : 0);
+      return sum + (i.balance_due !== undefined ? i.balance_due : Math.max(0, tot - paid));
+    },
     0
   );
 
@@ -1516,10 +1579,10 @@ export default function BillInvoicePage() {
               <tbody className="divide-y divide-gray-100">
                 {filteredInvoices.map((inv) => {
                   const id = (inv._id || inv.id) as string;
-                  const grandTotal = inv.amount || 0;
+                  const grandTotal = getInvoiceTotal(inv);
                   const amtPaid = inv.amount_paid ?? (inv.status === "Paid" ? grandTotal : 0);
-                  const balDue = inv.balance_due ?? (inv.status === "Paid" ? 0 : Math.max(0, grandTotal - amtPaid));
-                  const pct = inv.paid_percentage ?? (grandTotal > 0 ? Math.min(100, Math.round((amtPaid / grandTotal) * 100)) : 0);
+                  const balDue = inv.balance_due !== undefined && inv.balance_due !== null ? inv.balance_due : Math.max(0, grandTotal - amtPaid);
+                  const pct = inv.paid_percentage !== undefined ? inv.paid_percentage : (grandTotal > 0 ? Math.min(100, Math.round((amtPaid / grandTotal) * 100)) : 0);
 
                   return (
                     <tr key={id} className="hover:bg-gray-50/70 transition-colors">
@@ -3034,10 +3097,12 @@ export default function BillInvoicePage() {
       {/* ========================================================= */}
       {paymentModalInvoice && (() => {
         const inv = paymentModalInvoice;
-        const total = inv.amount || 0;
+        const total = getInvoiceTotal(inv);
         const paid = inv.amount_paid ?? (inv.status === "Paid" ? total : 0);
-        const bal = inv.balance_due ?? (inv.status === "Paid" ? 0 : Math.max(0, total - paid));
-        const pct = inv.paid_percentage ?? (total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0);
+        const bal = inv.balance_due !== undefined && inv.balance_due !== null && (inv.status !== "Paid" || paid < total)
+          ? inv.balance_due
+          : Math.max(0, total - paid);
+        const pct = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
         const enteredAmtNum = parseFloat(payAmount) || 0;
         const projectedPaid = Math.min(total, paid + enteredAmtNum);
         const projectedBal = Math.max(0, bal - enteredAmtNum);
