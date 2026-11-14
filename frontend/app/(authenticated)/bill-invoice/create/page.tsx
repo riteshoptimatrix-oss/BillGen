@@ -82,6 +82,7 @@ export default function CreateInvoicePage() {
   const [paymentTerms, setPaymentTerms] = useState("Immediate");
   const [paymentMethod, setPaymentMethod] = useState("UPI");
   const [status, setStatus] = useState("Paid");
+  const [customAmountPaid, setCustomAmountPaid] = useState<number>(0);
   const [customTermsDays, setCustomTermsDays] = useState<number>(0);
   const [dueDate, setDueDate] = useState("");
   const [taxRate, setTaxRate] = useState<number>(18);
@@ -511,8 +512,8 @@ export default function CreateInvoicePage() {
         sgst_amount: calculations.sgst,
         igst_amount: calculations.igst,
         amount: calculations.grandTotal,
-        amount_paid: status === "Paid" ? calculations.grandTotal : 0,
-        balance_due: status === "Paid" ? 0 : calculations.grandTotal,
+        amount_paid: status === "Paid" ? calculations.grandTotal : status === "Partially Paid" ? Math.min(calculations.grandTotal, customAmountPaid) : 0,
+        balance_due: status === "Paid" ? 0 : status === "Partially Paid" ? Math.max(0, calculations.grandTotal - customAmountPaid) : calculations.grandTotal,
         status: status,
 
         bank_name: bankName.trim() || undefined,
@@ -913,6 +914,64 @@ export default function CreateInvoicePage() {
                   className="w-full px-3 py-1.5 border border-[#e2e8f0] rounded-lg font-bold"
                 />
               </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">
+                  Payment Status
+                </label>
+                <select
+                  value={status}
+                  onChange={(e) => {
+                    const newStatus = e.target.value;
+                    setStatus(newStatus);
+                    if (newStatus === "Partially Paid" && customAmountPaid === 0) {
+                      setCustomAmountPaid(Math.round(calculations.grandTotal * 0.5));
+                    }
+                  }}
+                  className="w-full px-3 py-1.5 border border-[#e2e8f0] rounded-lg font-bold text-gray-800"
+                >
+                  <option value="Paid">Paid (100% Settled)</option>
+                  <option value="Partially Paid">Partially Paid (Advance)</option>
+                  <option value="Pending">Pending / Unpaid (0%)</option>
+                </select>
+              </div>
+
+              {status === "Partially Paid" && (
+                <div className="col-span-full bg-blue-50/60 p-3 rounded-xl border border-blue-200/70">
+                  <div className="flex justify-between items-center text-xs mb-1.5">
+                    <span className="font-bold text-gray-700">Advance Amount Paid (₹):</span>
+                    <span className="font-bold text-blue-700">
+                      Balance Due: ₹{Math.max(0, calculations.grandTotal - customAmountPaid).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-2.5 font-bold text-gray-400 text-xs">₹</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max={calculations.grandTotal}
+                        value={customAmountPaid}
+                        onChange={(e) => setCustomAmountPaid(Number(e.target.value))}
+                        className="w-36 pl-6 pr-3 py-1.5 bg-white border border-[#e2e8f0] rounded-lg font-bold text-xs"
+                      />
+                    </div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Quick %:</span>
+                    <div className="flex items-center gap-1">
+                      {[10, 25, 33, 50, 75].map((pct) => (
+                        <button
+                          key={pct}
+                          type="button"
+                          onClick={() => setCustomAmountPaid(Math.round(((calculations.grandTotal * pct) / 100) * 100) / 100)}
+                          className="px-2 py-1 text-[11px] font-bold bg-white hover:bg-blue-100 text-gray-700 hover:text-blue-700 border border-gray-200 rounded-lg transition-colors cursor-pointer"
+                        >
+                          {pct}%
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1493,8 +1552,8 @@ export default function CreateInvoicePage() {
                   sgst_amount: calculations.sgst,
                   igst_amount: calculations.igst,
                   amount: calculations.grandTotal,
-                  amount_paid: status === "Paid" ? calculations.grandTotal : 0,
-                  balance_due: status === "Paid" ? 0 : calculations.grandTotal,
+                  amount_paid: status === "Paid" ? calculations.grandTotal : status === "Partially Paid" ? Math.min(calculations.grandTotal, customAmountPaid) : 0,
+                  balance_due: status === "Paid" ? 0 : status === "Partially Paid" ? Math.max(0, calculations.grandTotal - customAmountPaid) : calculations.grandTotal,
 
                   bank_name: bankName,
                   account_number: accountNumber,

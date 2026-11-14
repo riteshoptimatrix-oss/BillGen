@@ -316,6 +316,8 @@ async def update_invoice(
             invoice_dict["status"] = "Paid"
         elif paid > 0 and bal > 0:
             invoice_dict["status"] = "Partially Paid"
+        elif paid == 0:
+            invoice_dict["status"] = "Pending"
 
         await request.app.mongodb["invoices"].update_one(
             {"_id": ObjectId(id)}, {"$set": invoice_dict}

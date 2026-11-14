@@ -187,6 +187,11 @@ export default function BillInvoicePage() {
   // Manual Partial Payment State
   const [paymentModalInvoice, setPaymentModalInvoice] = useState<Invoice | null>(null);
   const [payAmount, setPayAmount] = useState<string>("");
+  const [payPercent, setPayPercent] = useState<string>("");
+  const [percentBasis, setPercentBasis] = useState<"balance" | "total">("balance");
+  const [paymentModalTab, setPaymentModalTab] = useState<"record" | "adjust">("record");
+  const [adjustAmountPaid, setAdjustAmountPaid] = useState<string>("");
+  const [adjustPercent, setAdjustPercent] = useState<string>("");
   const [payDate, setPayDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [payMode, setPayMode] = useState<string>("Bank Transfer");
   const [payNote, setPayNote] = useState<string>("");
@@ -198,10 +203,136 @@ export default function BillInvoicePage() {
     const total = inv.amount || 0;
     const paid = inv.amount_paid ?? (inv.status === "Paid" ? total : 0);
     const bal = inv.balance_due ?? (inv.status === "Paid" ? 0 : Math.max(0, total - paid));
-    setPayAmount(bal > 0 ? bal.toString() : "");
+    
+    // Set adjustment initial state
+    setAdjustAmountPaid(paid.toString());
+    const initialPaidPct = total > 0 ? Math.round((paid / total) * 1000) / 10 : 0;
+    setAdjustPercent(initialPaidPct.toString());
+
+    if (bal <= 0) {
+      setPaymentModalTab("adjust");
+      setPayAmount("");
+      setPayPercent("");
+    } else {
+      setPaymentModalTab("record");
+      setPercentBasis("balance");
+      setPayAmount(bal.toString());
+      setPayPercent("100");
+    }
     setPayDate(new Date().toISOString().split("T")[0]);
     setPayMode("Bank Transfer");
     setPayNote("");
+  };
+
+  const handlePayPercentChange = (pctStr: string, basisOverride?: "balance" | "total") => {
+    setPayPercent(pctStr);
+    if (!paymentModalInvoice) return;
+    const total = paymentModalInvoice.amount || 0;
+    const paid = paymentModalInvoice.amount_paid ?? (paymentModalInvoice.status === "Paid" ? total : 0);
+    const bal = paymentModalInvoice.balance_due ?? (paymentModalInvoice.status === "Paid" ? 0 : Math.max(0, total - paid));
+    const basis = basisOverride || percentBasis;
+    const basisAmt = basis === "total" ? total : (bal > 0 ? bal : total);
+
+    const pct = parseFloat(pctStr);
+    if (!isNaN(pct) && pct >= 0 && basisAmt > 0) {
+      const maxAllowed = bal > 0 ? bal : total;
+      const rawAmt = (basisAmt * pct) / 100;
+      const calculated = Math.min(maxAllowed, Math.round(rawAmt * 100) / 100);
+      setPayAmount(calculated > 0 ? calculated.toString() : "");
+    } else if (pctStr === "") {
+      setPayAmount("");
+    }
+  };
+
+  const handlePayAmountChange = (amtStr: string) => {
+    setPayAmount(amtStr);
+    if (!paymentModalInvoice) return;
+    const total = paymentModalInvoice.amount || 0;
+    const paid = paymentModalInvoice.amount_paid ?? (paymentModalInvoice.status === "Paid" ? total : 0);
+    const bal = paymentModalInvoice.balance_due ?? (paymentModalInvoice.status === "Paid" ? 0 : Math.max(0, total - paid));
+    const basisAmt = percentBasis === "total" ? total : (bal > 0 ? bal : total);
+
+    const amt = parseFloat(amtStr);
+    if (!isNaN(amt) && amt >= 0 && basisAmt > 0) {
+      const calcPct = Math.round((amt / basisAmt) * 1000) / 10;
+      setPayPercent(calcPct.toString());
+    } else if (amtStr === "") {
+      setPayPercent("");
+    }
+  };
+
+  const handleAdjustPercentChange = (pctStr: string) => {
+    setAdjustPercent(pctStr);
+    if (!paymentModalInvoice) return;
+    const total = paymentModalInvoice.amount || 0;
+    const pct = parseFloat(pctStr);
+    if (!isNaN(pct) && pct >= 0 && total > 0) {
+      const clampedPct = Math.min(100, Math.max(0, pct));
+      const calcAmt = Math.round(((total * clampedPct) / 100) * 100) / 100;
+      setAdjustAmountPaid(calcAmt.toString());
+    } else if (pctStr === "") {
+      setAdjustAmountPaid("");
+    }
+  };
+
+  const handleAdjustAmountChange = (amtStr: string) => {
+    setAdjustAmountPaid(amtStr);
+    if (!paymentModalInvoice) return;
+    const total = paymentModalInvoice.amount || 0;
+    const amt = parseFloat(amtStr);
+    if (!isNaN(amt) && amt >= 0 && total > 0) {
+      const clampedAmt = Math.min(total, amt);
+      const calcPct = Math.round((clampedAmt / total) * 1000) / 10;
+      setAdjustPercent(calcPct.toString());
+    } else if (amtStr === "") {
+      setAdjustPercent("");
+    }
+  };
+
+  const handleSaveAdjustment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!paymentModalInvoice) return;
+    const invId = (paymentModalInvoice._id || paymentModalInvoice.id) as string;
+    const total = paymentModalInvoice.amount || 0;
+    const newPaid = Math.min(total, Math.max(0, parseFloat(adjustAmountPaid) || 0));
+
+    try {
+      setIsSubmittingPayment(true);
+      const token = getAuthToken();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+      const res = await fetch(`${apiUrl}/invoices/${invId}`, {
+        method: "PUT",
+        headers,
+        credentials: "include",
+        body: JSON.stringify({
+          amount_paid: newPaid
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ detail: "Payment adjustment failed" }));
+        throw new Error(errData.detail || "Failed to adjust payment");
+      }
+
+      const updatedInvoice: Invoice = await res.json();
+      setInvoices((prev) =>
+        prev.map((inv) => ((inv._id || inv.id) === invId ? updatedInvoice : inv))
+      );
+      setPaymentModalInvoice(updatedInvoice);
+      const newBal = updatedInvoice.balance_due ?? Math.max(0, (updatedInvoice.amount || 0) - (updatedInvoice.amount_paid || 0));
+      setPayAmount(newBal > 0 ? newBal.toString() : "");
+      setPayPercent(newBal > 0 ? "100" : "");
+      setAdjustAmountPaid(newPaid.toString());
+      setToastMessage(`✓ Invoice payment updated: ₹${newPaid.toLocaleString("en-IN")} paid, ₹${newBal.toLocaleString("en-IN")} remaining!`);
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (err: any) {
+      alert(err.message || "An error occurred while updating payment adjustment.");
+    } finally {
+      setIsSubmittingPayment(false);
+    }
   };
 
   const handleRecordPayment = async (e: React.FormEvent) => {
@@ -254,6 +385,8 @@ export default function BillInvoicePage() {
       setPaymentModalInvoice(updatedInvoice);
       const newBal = updatedInvoice.balance_due ?? Math.max(0, (updatedInvoice.amount || 0) - (updatedInvoice.amount_paid || 0));
       setPayAmount(newBal > 0 ? newBal.toString() : "");
+      setPayPercent(newBal > 0 ? "100" : "");
+      setAdjustAmountPaid((updatedInvoice.amount_paid ?? 0).toString());
       setPayNote("");
       setToastMessage(`✓ Payment of ₹${enteredAmt.toLocaleString("en-IN")} recorded successfully for ${updatedInvoice.invoice_number}!`);
       setTimeout(() => setToastMessage(null), 4000);
@@ -2225,16 +2358,36 @@ export default function BillInvoicePage() {
                   </div>
 
                   {formStatus !== "Paid" && (
-                    <div className="flex justify-between items-center text-xs pt-1">
-                      <span className="text-gray-500">Amount Paid (₹):</span>
-                      <input
-                        type="number"
-                        min="0"
-                        max={calculations.grandTotal}
-                        value={formAmountPaid}
-                        onChange={(e) => setFormAmountPaid(Number(e.target.value))}
-                        className="w-24 px-2 py-0.5 border border-[#e2e8f0] rounded text-right font-bold text-xs"
-                      />
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-gray-500 font-bold">Amount Paid (₹):</span>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="number"
+                            min="0"
+                            max={calculations.grandTotal}
+                            value={formAmountPaid}
+                            onChange={(e) => setFormAmountPaid(Number(e.target.value))}
+                            className="w-28 px-2 py-0.5 border border-[#e2e8f0] rounded text-right font-bold text-xs"
+                          />
+                          <span className="text-[11px] font-bold text-gray-500">
+                            ({calculations.grandTotal > 0 ? Math.round((formAmountPaid / calculations.grandTotal) * 100) : 0}%)
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span className="text-[10px] text-gray-400 font-semibold">Quick %:</span>
+                        {[0, 25, 50, 75, 100].map((pct) => (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() => setFormAmountPaid(Math.round(((calculations.grandTotal * pct) / 100) * 100) / 100)}
+                            className="px-1.5 py-0.5 text-[10px] font-bold bg-white text-gray-700 hover:bg-blue-50 hover:text-[#0260de] border border-[#e2e8f0] rounded transition-colors cursor-pointer"
+                          >
+                            {pct}%
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -2971,156 +3124,424 @@ export default function BillInvoicePage() {
                 </div>
               </div>
 
-              {/* Add Payment Form */}
-              {bal > 0 ? (
-                <form onSubmit={handleRecordPayment} className="space-y-4 mb-6 bg-blue-50/40 border border-blue-200/60 rounded-2xl p-5">
-                  <h3 className="text-sm font-black text-gray-900 flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-lg bg-[#0260de] text-white flex items-center justify-center text-xs">+</span>
-                    Record New Partial or Full Payment
-                  </h3>
+              {/* Modal Tabs */}
+              <div className="flex border-b border-[#e2e8f0] mb-5 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentModalTab("record")}
+                  className={`pb-2.5 px-3 text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+                    paymentModalTab === "record"
+                      ? "border-[#0260de] text-[#0260de]"
+                      : "border-transparent text-gray-500 hover:text-gray-800"
+                  }`}
+                >
+                  <span>💳</span>
+                  <span>Record Payment Transaction</span>
+                  {bal > 0 && (
+                    <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded-full font-bold">
+                      Due
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentModalTab("adjust")}
+                  className={`pb-2.5 px-3 text-xs font-bold transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+                    paymentModalTab === "adjust"
+                      ? "border-[#0260de] text-[#0260de]"
+                      : "border-transparent text-gray-500 hover:text-gray-800"
+                  }`}
+                >
+                  <span>⚙</span>
+                  <span>Set / Adjust Payment &amp; Balance</span>
+                </button>
+              </div>
 
-                  {/* Amount Field + Quick Presets */}
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                      Amount Received (₹) <span className="text-rose-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 font-bold text-gray-500">₹</span>
-                      <input
-                        type="number"
-                        min="1"
-                        max={bal}
-                        step="any"
-                        required
-                        value={payAmount}
-                        onChange={(e) => setPayAmount(e.target.value)}
-                        placeholder={`Enter amount (Max: ₹${bal.toLocaleString("en-IN")})`}
-                        className="w-full pl-8 pr-4 py-2.5 text-sm font-bold text-gray-900 bg-white border border-[#e2e8f0] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
-                      />
-                    </div>
+              {/* TAB 1: RECORD PAYMENT TRANSACTION */}
+              {paymentModalTab === "record" && (
+                <div>
+                  {bal > 0 ? (
+                    <form onSubmit={handleRecordPayment} className="space-y-4 mb-6 bg-blue-50/40 border border-blue-200/60 rounded-2xl p-5">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-blue-100 pb-3">
+                        <h3 className="text-sm font-black text-gray-900 flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-lg bg-[#0260de] text-white flex items-center justify-center text-xs">+</span>
+                          Record New Client Payment
+                        </h3>
+                        {/* Percentage Basis Switch */}
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-[11px] font-semibold text-gray-500">Calculate % from:</span>
+                          <div className="inline-flex rounded-lg border border-blue-200 bg-white p-0.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPercentBasis("balance");
+                                handlePayPercentChange(payPercent || "100", "balance");
+                              }}
+                              className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all ${
+                                percentBasis === "balance"
+                                  ? "bg-[#0260de] text-white shadow-xs"
+                                  : "text-gray-600 hover:text-gray-900"
+                              }`}
+                            >
+                              Balance Due (₹{bal.toLocaleString("en-IN")})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPercentBasis("total");
+                                handlePayPercentChange(payPercent || "50", "total");
+                              }}
+                              className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all ${
+                                percentBasis === "total"
+                                  ? "bg-[#0260de] text-white shadow-xs"
+                                  : "text-gray-600 hover:text-gray-900"
+                              }`}
+                            >
+                              Total Invoice (₹{total.toLocaleString("en-IN")})
+                            </button>
+                          </div>
+                        </div>
+                      </div>
 
-                    {/* Quick Preset Buttons */}
-                    <div className="flex flex-wrap items-center gap-2 mt-2">
-                      <span className="text-[10px] font-bold text-gray-400 uppercase">Quick Fill:</span>
+                      {/* Quick Percentage Presets */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wider">
+                            Quick Percentage Fill:
+                          </span>
+                          <span className="text-[10px] text-gray-400">
+                            Basis: {percentBasis === "total" ? "Grand Total" : "Remaining Balance"}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                          {[
+                            { pct: 10, label: "10%" },
+                            { pct: 20, label: "20%" },
+                            { pct: 25, label: "25%" },
+                            { pct: 50, label: "50%" },
+                            { pct: 75, label: "75%" },
+                            { pct: 100, label: percentBasis === "balance" ? "100% (Full)" : "100%" }
+                          ].map((item) => {
+                            const basisAmt = percentBasis === "total" ? total : bal;
+                            const calcRupees = Math.min(bal, Math.round(((basisAmt * item.pct) / 100) * 100) / 100);
+                            const isSelected = Math.abs(parseFloat(payPercent) - item.pct) < 0.2;
+                            return (
+                              <button
+                                key={item.pct}
+                                type="button"
+                                onClick={() => handlePayPercentChange(item.pct.toString())}
+                                className={`px-2 py-1.5 rounded-xl border text-center transition-all cursor-pointer ${
+                                  isSelected
+                                    ? "bg-[#0260de] text-white border-[#0260de] shadow-sm ring-2 ring-blue-300"
+                                    : "bg-white text-gray-800 border-[#e2e8f0] hover:border-blue-300 hover:bg-blue-50/50"
+                                }`}
+                              >
+                                <div className="text-xs font-black">{item.label}</div>
+                                <div className={`text-[10px] font-semibold mt-0.5 truncate ${isSelected ? "text-blue-100" : "text-gray-500"}`}>
+                                  ₹{calcRupees.toLocaleString("en-IN")}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Two-Way Synchronized Inputs: Percentage (%) & Custom Amount (₹) */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                            Calculate via Percentage (%) <span className="text-blue-600">*</span>
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="any"
+                              value={payPercent}
+                              onChange={(e) => handlePayPercentChange(e.target.value)}
+                              placeholder="e.g. 25 or 50"
+                              className="w-full pl-3.5 pr-8 py-2.5 text-sm font-bold text-gray-900 bg-white border border-[#e2e8f0] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
+                            />
+                            <span className="absolute inset-y-0 right-0 flex items-center pr-3 font-bold text-gray-500 text-xs">%</span>
+                          </div>
+                          <p className="text-[10px] text-gray-400 mt-1">
+                            Calculates Rupee amount automatically
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                            Or Custom Rupee Amount (₹) <span className="text-rose-500">*</span>
+                          </label>
+                          <div className="relative">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 font-bold text-gray-500">₹</span>
+                            <input
+                              type="number"
+                              min="1"
+                              max={bal}
+                              step="any"
+                              required
+                              value={payAmount}
+                              onChange={(e) => handlePayAmountChange(e.target.value)}
+                              placeholder={`Max: ₹${bal.toLocaleString("en-IN")}`}
+                              className="w-full pl-8 pr-4 py-2.5 text-sm font-bold text-gray-900 bg-white border border-[#e2e8f0] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
+                            />
+                          </div>
+                          <p className="text-[10px] text-gray-400 mt-1">
+                            Calculates percentage automatically
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Projected Status Preview */}
+                      {enteredAmtNum > 0 && enteredAmtNum <= bal && (
+                        <div className="p-3 bg-white border border-blue-200 rounded-xl text-xs space-y-1">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 font-bold">
+                            <span className="text-gray-700">
+                              Payment Amount: <span className="text-[#0260de]">₹{enteredAmtNum.toLocaleString("en-IN")}</span> ({total > 0 ? Math.round((enteredAmtNum / total) * 100) : 0}% of Total)
+                            </span>
+                            <span className="text-emerald-700">
+                              New Paid: ₹{projectedPaid.toLocaleString("en-IN")} ({projectedPct}%)
+                            </span>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] pt-1 border-t border-gray-100">
+                            <span className="text-gray-600">
+                              Resulting Balance Due: <strong className={projectedBal > 0 ? "text-amber-700" : "text-emerald-700"}>₹{projectedBal.toLocaleString("en-IN")}</strong>
+                            </span>
+                            <span className="font-bold text-[#0260de]">
+                              Status &rarr; {projectedStatus}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      {enteredAmtNum > bal && (
+                        <p className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-600 font-bold">
+                          ⚠️ Entered amount ₹{enteredAmtNum.toLocaleString("en-IN")} exceeds remaining balance of ₹{bal.toLocaleString("en-IN")}!
+                        </p>
+                      )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                            Payment Date <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="date"
+                            required
+                            value={payDate}
+                            onChange={(e) => setPayDate(e.target.value)}
+                            className="w-full px-3 py-2 text-xs font-semibold text-gray-800 bg-white border border-[#e2e8f0] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                            Payment Mode <span className="text-rose-500">*</span>
+                          </label>
+                          <select
+                            value={payMode}
+                            onChange={(e) => setPayMode(e.target.value)}
+                            className="w-full px-3 py-2 text-xs font-semibold text-gray-800 bg-white border border-[#e2e8f0] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
+                          >
+                            <option value="Bank Transfer">Bank Transfer (NEFT/RTGS/IMPS)</option>
+                            <option value="UPI">UPI / QR Code</option>
+                            <option value="Cash">Cash</option>
+                            <option value="Cheque">Cheque</option>
+                            <option value="Card">Debit / Credit Card</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                          Reference Note / Transaction ID (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={payNote}
+                          onChange={(e) => setPayNote(e.target.value)}
+                          placeholder="e.g. UTR / UPI Ref ID / Cheque # / Cash Receipt #"
+                          className="w-full px-3 py-2 text-xs text-gray-800 bg-white border border-[#e2e8f0] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
+                        />
+                      </div>
+
+                      <div className="pt-2">
+                        <button
+                          type="submit"
+                          disabled={isSubmittingPayment || enteredAmtNum <= 0 || enteredAmtNum > bal}
+                          className="w-full py-2.5 px-4 bg-[#0260de] hover:bg-[#0252bf] text-white text-xs font-bold rounded-xl transition-all shadow-md active:scale-98 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          {isSubmittingPayment ? (
+                            <>
+                              <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              <span>Recording Payment...</span>
+                            </>
+                          ) : (
+                            <span>
+                              Save Payment (+ ₹{enteredAmtNum > 0 ? enteredAmtNum.toLocaleString("en-IN") : "0"} / {total > 0 ? Math.round((enteredAmtNum / total) * 100) : 0}%)
+                            </span>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="p-5 mb-6 bg-emerald-50 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                          ✓
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-black text-emerald-900">Invoice Fully Paid (100%)</h4>
+                          <p className="text-[11px] text-emerald-700 mt-0.5">
+                            Total ₹{total.toLocaleString("en-IN")} received. No outstanding balance.
+                          </p>
+                        </div>
+                      </div>
                       <button
                         type="button"
-                        onClick={() => setPayAmount(bal.toString())}
-                        className="px-2 py-1 text-[11px] font-bold bg-white text-emerald-700 border border-emerald-300 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer"
+                        onClick={() => setPaymentModalTab("adjust")}
+                        className="px-3.5 py-2 text-xs font-bold text-[#0260de] bg-white border border-blue-200 hover:bg-blue-50 rounded-xl transition-all shadow-2xs shrink-0 cursor-pointer"
                       >
-                        Full Remaining (₹{bal.toLocaleString("en-IN")})
+                        Adjust / Reopen Balance &rarr;
                       </button>
-                      {bal > 500 && (
-                        <button
-                          type="button"
-                          onClick={() => setPayAmount(Math.round(bal * 0.5).toString())}
-                          className="px-2 py-1 text-[11px] font-bold bg-white text-blue-700 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer"
-                        >
-                          50% (₹{Math.round(bal * 0.5).toLocaleString("en-IN")})
-                        </button>
-                      )}
-                      {bal > 1000 && (
-                        <button
-                          type="button"
-                          onClick={() => setPayAmount(Math.round(bal * 0.25).toString())}
-                          className="px-2 py-1 text-[11px] font-bold bg-white text-indigo-700 border border-indigo-300 rounded-lg hover:bg-indigo-50 transition-colors cursor-pointer"
-                        >
-                          25% (₹{Math.round(bal * 0.25).toLocaleString("en-IN")})
-                        </button>
-                      )}
                     </div>
+                  )}
+                </div>
+              )}
 
-                    {/* Projected Status Preview */}
-                    {enteredAmtNum > 0 && enteredAmtNum <= bal && (
-                      <div className="mt-3 p-2.5 bg-white border border-blue-200 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                        <span className="text-gray-600">
-                          After this payment: <strong className="text-emerald-600">₹{projectedPaid.toLocaleString("en-IN")}</strong> paid ({projectedPct}%)
-                        </span>
-                        <span className="font-bold text-blue-700">
-                          Status &rarr; {projectedStatus} (Balance: ₹{projectedBal.toLocaleString("en-IN")})
-                        </span>
-                      </div>
-                    )}
-                    {enteredAmtNum > bal && (
-                      <p className="mt-1.5 text-xs text-rose-600 font-bold">
-                        ⚠️ Entered amount exceeds remaining balance of ₹{bal.toLocaleString("en-IN")}!
-                      </p>
-                    )}
+              {/* TAB 2: SET / ADJUST OVERALL PAYMENT STATUS & PERCENTAGE */}
+              {paymentModalTab === "adjust" && (
+                <form onSubmit={handleSaveAdjustment} className="space-y-4 mb-6 bg-slate-50 border border-slate-200/80 rounded-2xl p-5">
+                  <div className="border-b border-slate-200 pb-3">
+                    <h3 className="text-sm font-black text-gray-900 flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs">⚙</span>
+                      Set or Adjust Total Payment Status &amp; Percentage
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Directly set the invoice's total paid amount by percentage (%) or custom rupee amount (₹).
+                    </p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                        Payment Date <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="date"
-                        required
-                        value={payDate}
-                        onChange={(e) => setPayDate(e.target.value)}
-                        className="w-full px-3 py-2 text-xs font-semibold text-gray-800 bg-white border border-[#e2e8f0] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                        Payment Mode <span className="text-rose-500">*</span>
-                      </label>
-                      <select
-                        value={payMode}
-                        onChange={(e) => setPayMode(e.target.value)}
-                        className="w-full px-3 py-2 text-xs font-semibold text-gray-800 bg-white border border-[#e2e8f0] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
-                      >
-                        <option value="Bank Transfer">Bank Transfer (NEFT/RTGS/IMPS)</option>
-                        <option value="UPI">UPI / QR Code</option>
-                        <option value="Cash">Cash</option>
-                        <option value="Cheque">Cheque</option>
-                      </select>
-                    </div>
-                  </div>
-
+                  {/* Preset Percentages */}
                   <div>
                     <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
-                      Reference Note / Transaction ID (Optional)
+                      Quick Status Presets:
                     </label>
-                    <input
-                      type="text"
-                      value={payNote}
-                      onChange={(e) => setPayNote(e.target.value)}
-                      placeholder="e.g. UTR / UPI Ref ID / Cheque # / Cash Receipt #"
-                      className="w-full px-3 py-2 text-xs text-gray-800 bg-white border border-[#e2e8f0] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
-                    />
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                      {[
+                        { pct: 0, label: "0% Unpaid", color: "text-rose-700" },
+                        { pct: 25, label: "25% Paid", color: "text-blue-700" },
+                        { pct: 50, label: "50% Paid", color: "text-indigo-700" },
+                        { pct: 75, label: "75% Paid", color: "text-violet-700" },
+                        { pct: 100, label: "100% Paid", color: "text-emerald-700" }
+                      ].map((item) => {
+                        const targetAmt = Math.round(((total * item.pct) / 100) * 100) / 100;
+                        const isSelected = Math.abs((parseFloat(adjustPercent) || 0) - item.pct) < 0.2;
+                        return (
+                          <button
+                            key={item.pct}
+                            type="button"
+                            onClick={() => handleAdjustPercentChange(item.pct.toString())}
+                            className={`p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                              isSelected
+                                ? "bg-indigo-600 text-white border-indigo-600 shadow-sm ring-2 ring-indigo-300"
+                                : "bg-white text-gray-800 border-[#e2e8f0] hover:border-indigo-300 hover:bg-indigo-50/40"
+                            }`}
+                          >
+                            <div className="text-xs font-black">{item.label}</div>
+                            <div className={`text-[10px] font-semibold mt-0.5 truncate ${isSelected ? "text-indigo-100" : item.color}`}>
+                              ₹{targetAmt.toLocaleString("en-IN")}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
+
+                  {/* Dual Synchronized Inputs for Adjustment */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                        Set Total Paid Percentage (%)
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="any"
+                          value={adjustPercent}
+                          onChange={(e) => handleAdjustPercentChange(e.target.value)}
+                          placeholder="0 - 100"
+                          className="w-full pl-3.5 pr-8 py-2.5 text-sm font-bold text-gray-900 bg-white border border-[#e2e8f0] rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+                        />
+                        <span className="absolute inset-y-0 right-0 flex items-center pr-3 font-bold text-gray-500 text-xs">%</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                        Or Set Total Amount Paid (₹)
+                      </label>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 font-bold text-gray-500">₹</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max={total}
+                          step="any"
+                          value={adjustAmountPaid}
+                          onChange={(e) => handleAdjustAmountChange(e.target.value)}
+                          placeholder={`Max: ₹${total.toLocaleString("en-IN")}`}
+                          className="w-full pl-8 pr-4 py-2.5 text-sm font-bold text-gray-900 bg-white border border-[#e2e8f0] rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Projection Box */}
+                  {(() => {
+                    const adjAmt = Math.min(total, Math.max(0, parseFloat(adjustAmountPaid) || 0));
+                    const adjBal = Math.max(0, total - adjAmt);
+                    const adjPct = total > 0 ? Math.round((adjAmt / total) * 100) : 0;
+                    const adjStatus = adjBal === 0 ? "Paid (100%)" : adjAmt > 0 ? `Partially Paid (${adjPct}%)` : "Pending (0%)";
+                    return (
+                      <div className="p-3 bg-white border border-indigo-200 rounded-xl text-xs space-y-1">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 font-bold">
+                          <span className="text-gray-700">
+                            New Total Paid: <span className="text-indigo-600">₹{adjAmt.toLocaleString("en-IN")}</span> ({adjPct}%)
+                          </span>
+                          <span className={adjBal > 0 ? "text-amber-700" : "text-emerald-700"}>
+                            New Balance Due: ₹{adjBal.toLocaleString("en-IN")}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-gray-500 pt-1 border-t border-gray-100 flex justify-between">
+                          <span>Updated Status: <strong className="text-indigo-700">{adjStatus}</strong></span>
+                          <span className="text-gray-400">Total Invoice: ₹{total.toLocaleString("en-IN")}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   <div className="pt-2">
                     <button
                       type="submit"
-                      disabled={isSubmittingPayment || enteredAmtNum <= 0 || enteredAmtNum > bal}
-                      className="w-full py-2.5 px-4 bg-[#0260de] hover:bg-[#0252bf] text-white text-xs font-bold rounded-xl transition-all shadow-md active:scale-98 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                      disabled={isSubmittingPayment}
+                      className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-md active:scale-98 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
                     >
                       {isSubmittingPayment ? (
                         <>
                           <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          <span>Recording Payment...</span>
+                          <span>Updating Payment...</span>
                         </>
                       ) : (
                         <span>
-                          Save Payment (+ ₹{enteredAmtNum > 0 ? enteredAmtNum.toLocaleString("en-IN") : "0"})
+                          Save Payment Adjustment (Set to ₹{(Math.min(total, Math.max(0, parseFloat(adjustAmountPaid) || 0))).toLocaleString("en-IN")})
                         </span>
                       )}
                     </button>
                   </div>
                 </form>
-              ) : (
-                <div className="p-4 mb-6 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-sm shrink-0">
-                    ✓
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-emerald-900">Invoice Fully Paid (100%)</h4>
-                    <p className="text-[11px] text-emerald-700 mt-0.5">
-                      The full invoice amount of ₹{total.toLocaleString("en-IN")} has been received. No remaining balance due.
-                    </p>
-                  </div>
-                </div>
               )}
 
               {/* Payment History List */}
