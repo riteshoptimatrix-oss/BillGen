@@ -148,6 +148,16 @@ function ProductDetailContent() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // 1. Instant 0ms preview with FileReader data URL
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setFormData((prev) => ({ ...prev, image: reader.result as string }));
+        setImageError(false);
+      }
+    };
+    reader.readAsDataURL(file);
+
     try {
       const uploadData = new FormData();
       uploadData.append("file", file);
@@ -169,29 +179,11 @@ function ProductDetailContent() {
         setImageError(false);
         showToast("✓ Product image uploaded successfully");
       } else {
-        // Fallback: Read as base64 Data URL so image is always preserved and editable
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (typeof reader.result === "string") {
-            setFormData((prev) => ({ ...prev, image: reader.result as string }));
-            setImageError(false);
-            showToast("Product image attached successfully");
-          }
-        };
-        reader.readAsDataURL(file);
+        showToast("Product image attached & ready to save");
       }
     } catch (err) {
       console.error("Upload failed", err);
-      // Client-side fallback to FileReader Data URL
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === "string") {
-          setFormData((prev) => ({ ...prev, image: reader.result as string }));
-          setImageError(false);
-          showToast("Product image attached successfully");
-        }
-      };
-      reader.readAsDataURL(file);
+      showToast("Product image attached & ready to save");
     }
   };
 

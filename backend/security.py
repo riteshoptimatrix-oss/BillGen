@@ -187,9 +187,13 @@ ALLOWED_ALL_EXTENSIONS = ALLOWED_IMAGE_EXTENSIONS | ALLOWED_PDF_EXTENSIONS
 
 ALLOWED_MIME_TYPES: Set[str] = {
     "image/jpeg",
+    "image/jpg",
+    "image/pjpeg",
     "image/png",
+    "image/x-png",
     "image/webp",
-    "application/pdf"
+    "application/pdf",
+    "application/octet-stream"
 }
 
 MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB

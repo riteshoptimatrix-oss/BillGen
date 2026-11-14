@@ -122,6 +122,7 @@ export default function LabourQuickView({
       const uploadRes = await fetch(`${apiUrl}/labours/upload`, {
         method: "POST",
         headers,
+        credentials: "include",
         body: uploadData
       });
 

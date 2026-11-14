@@ -1,5 +1,6 @@
 import os
 import uuid
+import base64
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Body, Request, HTTPException, status, UploadFile, File, Depends
 from fastapi.responses import JSONResponse
@@ -52,8 +53,32 @@ async def upload_image(
                 await out_file.write(content)
         except Exception:
             pass
+
+    # Permanently persist image / document in MongoDB Atlas so it survives Render restarts
+    mime_type = file.content_type or ("application/pdf" if ext == ".pdf" else "image/jpeg")
+    try:
+        db = request.app.mongodb
+        base64_data = base64.b64encode(content).decode("utf-8")
+        await db["uploaded_files"].update_one(
+            {"filename": unique_filename},
+            {
+                "$set": {
+                    "filename": unique_filename,
+                    "content_type": mime_type,
+                    "data_base64": base64_data,
+                    "size": len(content),
+                    "created_at": datetime.now().isoformat()
+                }
+            },
+            upsert=True
+        )
+    except Exception as e:
+        print(f"Warning: MongoDB labour document persistence failed: {e}")
         
     base_url = str(request.base_url).rstrip("/")
+    if "onrender.com" in base_url and base_url.startswith("http://"):
+        base_url = base_url.replace("http://", "https://")
+
     return {
         "url": f"{base_url}/uploads/{unique_filename}",
         "path": f"/uploads/{unique_filename}",

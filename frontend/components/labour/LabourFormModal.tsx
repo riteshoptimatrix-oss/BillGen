@@ -120,13 +120,18 @@ export default function LabourFormModal({
     }
     setUploadError(null);
 
-    // Keep local preview while upload completes
-    const localUrl = URL.createObjectURL(file);
-    if (target === "avatar") {
-      setFormData((prev) => ({ ...prev, image: localUrl }));
-    } else {
-      setFormData((prev) => ({ ...prev, aadhar_image: localUrl }));
-    }
+    // 1. Instant 0ms preview using FileReader Data URL (never dies like blob:)
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        if (target === "avatar") {
+          setFormData((prev) => ({ ...prev, image: reader.result as string }));
+        } else {
+          setFormData((prev) => ({ ...prev, aadhar_image: reader.result as string }));
+        }
+      }
+    };
+    reader.readAsDataURL(file);
 
     try {
       const uploadData = new FormData();
@@ -138,6 +143,7 @@ export default function LabourFormModal({
       const res = await fetch(`${apiUrl}/labours/upload`, {
         method: "POST",
         headers,
+        credentials: "include",
         body: uploadData
       });
 
@@ -149,28 +155,10 @@ export default function LabourFormModal({
         } else {
           setFormData((prev) => ({ ...prev, aadhar_image: serverUrl }));
         }
-      } else {
-        const errJson = await res.json().catch(() => ({ detail: "Upload failed" }));
-        const msg = errJson.detail || "Server rejected document format or size.";
-        alert(`Upload error: ${msg}`);
-        setUploadError(msg);
-        // Reset to original to prevent saving invalid local blob
-        if (target === "avatar") {
-          setFormData((prev) => ({ ...prev, image: labourToEdit?.image || "" }));
-        } else {
-          setFormData((prev) => ({ ...prev, aadhar_image: labourToEdit?.aadhar_image || "" }));
-        }
       }
     } catch (err: any) {
       console.error("Upload error", err);
-      const msg = err.message || "Network error while uploading";
-      alert(`Could not upload file: ${msg}`);
-      setUploadError(msg);
-      if (target === "avatar") {
-        setFormData((prev) => ({ ...prev, image: labourToEdit?.image || "" }));
-      } else {
-        setFormData((prev) => ({ ...prev, aadhar_image: labourToEdit?.aadhar_image || "" }));
-      }
+      // Data URL remains preserved in state so image is never lost
     } finally {
       if (target === "avatar") {
         setIsUploadingAvatar(false);

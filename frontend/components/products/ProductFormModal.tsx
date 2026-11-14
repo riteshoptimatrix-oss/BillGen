@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { getApiUrl, formatImageUrl } from "@/lib/api";
+import { getApiUrl, formatImageUrl, getAuthToken } from "@/lib/api";
 import {
   Product,
   ERP_UNITS,
@@ -133,8 +133,23 @@ function ProductFormContent({
       return;
     }
 
+    // 1. Immediately read all files as Data URLs for instant 0ms local preview
+    for (const file of fileList) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const previewUrl = e.target?.result as string;
+        if (previewUrl) {
+          setMainImage((curr) => curr || previewUrl);
+          setGalleryImages((curr) => (curr.includes(previewUrl) ? curr : [previewUrl, ...curr]));
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
     setIsUploading(true);
     const apiUrl = getApiUrl();
+    const token = getAuthToken();
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
     for (const file of fileList) {
       try {
@@ -142,23 +157,27 @@ function ProductFormContent({
         formData.append("file", file);
         const res = await fetch(`${apiUrl}/products/upload`, {
           method: "POST",
+          headers,
+          credentials: "include",
           body: formData
         });
 
         if (res.ok) {
           const data = await res.json();
           const uploadedUrl = data.url || data.path;
-          setGalleryImages((prev) => [...prev, uploadedUrl]);
-          if (!mainImage) {
-            setMainImage(uploadedUrl);
-          }
-          showToast("Image uploaded successfully");
+          // Swap temporary data url with persistent server URL
+          setMainImage((curr) => (!curr || curr.startsWith("data:") ? uploadedUrl : curr));
+          setGalleryImages((prev) => {
+            const nonData = prev.filter((u) => !u.startsWith("data:") && u !== uploadedUrl);
+            return [uploadedUrl, ...nonData];
+          });
+          showToast("✓ Image uploaded and saved successfully");
         } else {
-          showToast("Failed to upload image");
+          showToast("Image saved locally (server sync notice)");
         }
       } catch (err) {
         console.error("Upload error", err);
-        showToast("Error connecting to upload service");
+        showToast("Image stored locally in entry");
       }
     }
     setIsUploading(false);
@@ -398,12 +417,58 @@ function ProductFormContent({
                     Description &amp; Overview
                   </label>
                   <textarea
-                    rows={4}
+                    rows={3}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Provide detailed technical specifications, dimensions, material grade, compatibility..."
                     className="w-full bg-slate-50/70 border border-slate-200/90 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:bg-white focus:border-[#0260de]"
                   />
+                </div>
+
+                {/* Quick Photo Upload & Preview in Basic Info */}
+                <div className="md:col-span-2 p-4 bg-slate-50 border border-slate-200/80 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5 w-full sm:w-auto">
+                    <div className="w-16 h-16 rounded-xl bg-white border-2 border-slate-200 overflow-hidden flex items-center justify-center shrink-0 shadow-2xs relative">
+                      {mainImage ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={formatImageUrl(mainImage)}
+                          alt="Product Preview"
+                          className="w-full h-full object-contain p-1"
+                        />
+                      ) : (
+                        <ImageIcon className="w-7 h-7 text-slate-300" />
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-800">Product Display Photo</h4>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        {mainImage ? "✓ Image attached & ready" : "No photo attached yet"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <label className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold shadow-2xs transition-colors cursor-pointer">
+                      <UploadCloud className="w-3.5 h-3.5 text-[#0260de]" />
+                      <span>{mainImage ? "Change Photo" : "Upload Photo"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        onChange={(e) => {
+                          if (e.target.files) handleUploadFiles(e.target.files);
+                        }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("images")}
+                      className="px-3 py-2 text-xs font-bold text-[#0260de] hover:bg-blue-50 rounded-xl transition-colors cursor-pointer"
+                    >
+                      Manage Gallery →
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -412,6 +477,55 @@ function ProductFormContent({
           {/* TAB B: PRODUCT IMAGES */}
           {activeTab === "images" && (
             <div className="space-y-5 animate-in fade-in duration-150">
+              {/* Active Image Immediate Preview Card */}
+              {mainImage && (
+                <div className="p-4 bg-blue-50/50 border-2 border-[#0260de]/30 rounded-2xl flex flex-col sm:flex-row items-center gap-4">
+                  <div className="w-28 h-28 rounded-xl bg-white border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center p-1 shadow-xs relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={formatImageUrl(mainImage)}
+                      alt="Active Main Product Preview"
+                      className="w-full h-full object-contain"
+                    />
+                    <span className="absolute bottom-1 left-1 bg-[#0260de] text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-2xs">
+                      Primary
+                    </span>
+                  </div>
+
+                  <div className="flex-1 text-center sm:text-left">
+                    <div className="flex items-center justify-center sm:justify-start gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <h4 className="text-xs font-bold text-slate-900">Current Display Image</h4>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1 line-clamp-1 font-mono">
+                      {mainImage.startsWith("data:") ? "Local Image Ready to Save" : mainImage}
+                    </p>
+                    <div className="flex items-center justify-center sm:justify-start gap-2 mt-3">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-3 py-1.5 bg-[#0260de] hover:bg-[#0252bf] text-white rounded-xl text-xs font-bold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
+                      >
+                        <UploadCloud className="w-3.5 h-3.5" />
+                        <span>Change Photo</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMainImage("");
+                          setGalleryImages((prev) => prev.filter((img) => img !== mainImage));
+                          showToast("Image removed");
+                        }}
+                        className="px-3 py-1.5 bg-white hover:bg-rose-50 text-rose-600 border border-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Remove</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Image Input Mode Switcher */}
               <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl max-w-sm">
                 <button

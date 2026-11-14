@@ -52,6 +52,11 @@ export function formatImageUrl(url?: string): string {
   let cleanUrl = url.trim();
   if (!cleanUrl) return "";
 
+  // 0. Immediate pass-through for base64 Data URLs and local object blob URLs
+  if (cleanUrl.startsWith("data:") || cleanUrl.startsWith("blob:")) {
+    return cleanUrl;
+  }
+
   // 1. If it's a relative path (e.g. /uploads/image.jpg or uploads/image.jpg)
   if (cleanUrl.startsWith("/uploads/") || cleanUrl.startsWith("uploads/")) {
     const relativePath = cleanUrl.startsWith("/") ? cleanUrl : `/${cleanUrl}`;

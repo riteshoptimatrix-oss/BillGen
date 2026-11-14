@@ -2,6 +2,7 @@ import os
 import re
 import base64
 import logging
+import mimetypes
 from contextlib import asynccontextmanager
 from typing import Dict, Any
 
@@ -91,6 +92,7 @@ async def lifespan(app: FastAPI):
         await app.mongodb["expenses"].create_index([("date", -1)], background=True)
         await app.mongodb["notifications"].create_index([("created_at", -1)], background=True)
         await app.mongodb["notifications"].create_index([("is_read", 1)], background=True)
+        await app.mongodb["uploaded_files"].create_index([("filename", 1)], unique=True, background=True)
         logger.info("MongoDB Atlas performance indexes verified/initialized.")
     except Exception as idx_err:
         logger.warning(f"MongoDB Atlas index notice: {idx_err}")
@@ -230,6 +232,95 @@ async def serve_invoice_pdf(filename: str, request: Request):
         logger.warning(f"MongoDB invoice recovery fallback notice for {safe_filename}: {e}")
 
     raise HTTPException(status_code=404, detail="Invoice PDF not found.")
+
+@app.get("/uploads/{filename}", tags=["uploads"])
+async def serve_uploaded_file(filename: str, request: Request):
+    """
+    High-availability Image & Document Delivery:
+    1. Direct file lookup on local disk.
+    2. Persistent cloud fallback (automatically reconstructs image from MongoDB Atlas
+       if Render restarted/wiped the ephemeral container disk).
+    """
+    safe_filename = os.path.basename(filename)
+    search_dirs = [
+        os.path.abspath("uploads"),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "uploads")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uploads")),
+    ]
+
+    # 1. Direct match on disk
+    for s_dir in search_dirs:
+        candidate = os.path.join(s_dir, safe_filename)
+        if os.path.isfile(candidate) and os.path.getsize(candidate) > 0:
+            mime_type, _ = mimetypes.guess_type(candidate)
+            return FileResponse(
+                candidate,
+                media_type=mime_type or "image/jpeg",
+                headers={"Cache-Control": "public, max-age=86400"}
+            )
+
+    # 2. Persistent cloud fallback: restore from MongoDB Atlas uploaded_files
+    try:
+        db = request.app.mongodb
+        file_doc = await db["uploaded_files"].find_one({"filename": safe_filename})
+        if file_doc and file_doc.get("data_base64"):
+            file_bytes = base64.b64decode(file_doc["data_base64"])
+            dest_dir = search_dirs[0]
+            os.makedirs(dest_dir, exist_ok=True)
+            saved_path = os.path.join(dest_dir, safe_filename)
+            with open(saved_path, "wb") as f:
+                f.write(file_bytes)
+            return FileResponse(
+                saved_path,
+                media_type=file_doc.get("content_type", "image/jpeg"),
+                headers={"Cache-Control": "public, max-age=86400"}
+            )
+    except Exception as e:
+        logger.warning(f"MongoDB image recovery notice for {safe_filename}: {e}")
+
+    # 3. If file not found in uploaded_files, check if any product or labour document references it with base64
+    try:
+        db = request.app.mongodb
+        # Check products
+        prod = await db["products"].find_one({"image": {"$regex": safe_filename, "$options": "i"}})
+        if prod and prod.get("image") and prod["image"].startswith("data:"):
+            # It's an inline data url
+            header, encoded = prod["image"].split(",", 1)
+            mime_match = re.search(r"data:([^;]+);", header)
+            mime_type = mime_match.group(1) if mime_match else "image/jpeg"
+            file_bytes = base64.b64decode(encoded)
+            dest_dir = search_dirs[0]
+            os.makedirs(dest_dir, exist_ok=True)
+            saved_path = os.path.join(dest_dir, safe_filename)
+            with open(saved_path, "wb") as f:
+                f.write(file_bytes)
+            return FileResponse(saved_path, media_type=mime_type)
+
+        # Check labours
+        lab = await db["labours"].find_one({
+            "$or": [
+                {"image": {"$regex": safe_filename, "$options": "i"}},
+                {"aadhar_image": {"$regex": safe_filename, "$options": "i"}}
+            ]
+        })
+        if lab:
+            for field in ["image", "aadhar_image"]:
+                val = lab.get(field, "")
+                if val and safe_filename in val and val.startswith("data:"):
+                    header, encoded = val.split(",", 1)
+                    mime_match = re.search(r"data:([^;]+);", header)
+                    mime_type = mime_match.group(1) if mime_match else "image/jpeg"
+                    file_bytes = base64.b64decode(encoded)
+                    dest_dir = search_dirs[0]
+                    os.makedirs(dest_dir, exist_ok=True)
+                    saved_path = os.path.join(dest_dir, safe_filename)
+                    with open(saved_path, "wb") as f:
+                        f.write(file_bytes)
+                    return FileResponse(saved_path, media_type=mime_type)
+    except Exception as e:
+        logger.warning(f"Secondary check notice for {safe_filename}: {e}")
+
+    raise HTTPException(status_code=404, detail="Uploaded image not found.")
 
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
