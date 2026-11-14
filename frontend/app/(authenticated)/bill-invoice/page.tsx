@@ -1632,49 +1632,73 @@ export default function BillInvoicePage() {
                       <td className="py-3.5 px-6 text-center whitespace-nowrap">
                         {getStatusBadge(inv.status, pct)}
                       </td>
-                      <td className="py-3.5 px-6 text-right whitespace-nowrap space-x-1.5">
-                        <button
-                          type="button"
-                          onClick={() => openEditModal(inv)}
-                          className="px-2.5 py-1 text-[11px] font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg transition-all inline-flex items-center gap-1 shadow-2xs active:scale-95 cursor-pointer"
-                          title={`Edit Invoice ${inv.invoice_number}`}
-                        >
-                          <svg className="w-3 h-3 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                          <span>Edit</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openPaymentModal(inv)}
-                          className="px-2.5 py-1 text-[11px] font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg transition-all inline-flex items-center gap-1 shadow-2xs active:scale-95 cursor-pointer"
-                          title="Record payment received from client"
-                        >
-                          <span>₹ Pay</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openWhatsAppModal(inv)}
-                          className="px-2.5 py-1 text-[11px] font-bold text-white bg-[#25D366] hover:bg-[#20bd5a] border border-[#25D366] rounded-lg transition-all inline-flex items-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer"
-                          title={`Share Invoice ${inv.invoice_number} on WhatsApp`}
-                        >
-                          <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                            <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.665-.699c.983.537 1.839.814 2.795.814 3.179 0 5.766-2.587 5.767-5.766.002-3.18-2.585-5.766-5.767-5.766zm3.376 8.21c-.144.405-.837.774-1.17.824-.312.045-.697.072-2.148-.528-1.749-.724-2.88-2.5-2.967-2.617-.087-.116-.708-.941-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.299.144.347.491 1.2.534 1.287.043.087.072.188.014.303-.058.116-.087.188-.173.289l-.26.303c-.087.087-.178.182-.077.355.101.173.45.742.965 1.202.664.593 1.224.776 1.397.863.173.087.275.072.376-.043.101-.116.433-.506.549-.679.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.043.072.043.419-.101.824z" />
-                          </svg>
-                          <span>WhatsApp</span>
-                        </button>
-                        <button
-                          onClick={() => setViewInvoice(inv)}
-                          className="px-2.5 py-1 text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                        >
-                          View / Download PDF
-                        </button>
-                        <button
-                          onClick={() => handleDeleteInvoice(id)}
-                          className="px-2 py-1 text-[11px] font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                        >
-                          Delete
-                        </button>
+                      <td className="py-3.5 px-6 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center justify-end gap-1.5">
+                          {/* 1. Edit */}
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(inv)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-lg shadow-2xs hover:border-slate-300 transition-all active:scale-95 cursor-pointer"
+                            title={`Edit Invoice ${inv.invoice_number}`}
+                          >
+                            <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                            <span>Edit</span>
+                          </button>
+
+                          {/* 2. ₹ Pay */}
+                          <button
+                            type="button"
+                            onClick={() => openPaymentModal(inv)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-white bg-blue-600 hover:bg-blue-700 border border-blue-600 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer"
+                            title="Record payment or view history"
+                          >
+                            <svg className="w-3.5 h-3.5 text-blue-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                            <span>₹ Pay</span>
+                          </button>
+
+                          {/* 3. WhatsApp */}
+                          <button
+                            type="button"
+                            onClick={() => openWhatsAppModal(inv)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-white bg-[#25D366] hover:bg-[#20bd5a] border border-[#20bd5a] rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer"
+                            title={`Share Invoice ${inv.invoice_number} on WhatsApp`}
+                          >
+                            <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                              <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.665-.699c.983.537 1.839.814 2.795.814 3.179 0 5.766-2.587 5.767-5.766.002-3.18-2.585-5.766-5.767-5.766zm3.376 8.21c-.144.405-.837.774-1.17.824-.312.045-.697.072-2.148-.528-1.749-.724-2.88-2.5-2.967-2.617-.087-.116-.708-.941-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.299.144.347.491 1.2.534 1.287.043.087.072.188.014.303-.058.116-.087.188-.173.289l-.26.303c-.087.087-.178.182-.077.355.101.173.45.742.965 1.202.664.593 1.224.776 1.397.863.173.087.275.072.376-.043.101-.116.433-.506.549-.679.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.043.072.043.419-.101.824z" />
+                            </svg>
+                            <span>WhatsApp</span>
+                          </button>
+
+                          {/* 4. View PDF */}
+                          <button
+                            type="button"
+                            onClick={() => setViewInvoice(inv)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200/90 border border-slate-200/90 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer"
+                            title={`View, print or download PDF for ${inv.invoice_number}`}
+                          >
+                            <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span>View PDF</span>
+                          </button>
+
+                          {/* 5. Delete */}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteInvoice(id)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200/80 rounded-lg shadow-2xs transition-all active:scale-95 cursor-pointer"
+                            title={`Delete Invoice ${inv.invoice_number}`}
+                          >
+                            <svg className="w-3.5 h-3.5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            <span>Delete</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
