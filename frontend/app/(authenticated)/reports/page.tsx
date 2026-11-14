@@ -36,7 +36,6 @@ function ReportsContent() {
   // Data States
   const [salesData, setSalesData] = useState<any>(null);
   const [purchaseData, setPurchaseData] = useState<any>(null);
-  const [expensesData, setExpensesData] = useState<any>(null);
   const [gstData, setGstData] = useState<any>(null);
   const [stockData, setStockData] = useState<any>(null);
   const [plData, setPlData] = useState<any>(null);
@@ -111,9 +110,6 @@ function ReportsContent() {
         } else if (activeTab === "purchase-register") {
           const res = await fetch(`${apiUrl}/reports/purchase-register?${getDateQuery()}`, fetchOpts);
           if (res.ok && !ignore) setPurchaseData(await res.json());
-        } else if (activeTab === "expenses-statement") {
-          const res = await fetch(`${apiUrl}/reports/expenses-statement?${getDateQuery()}`, fetchOpts);
-          if (res.ok && !ignore) setExpensesData(await res.json());
         } else if (activeTab === "gst-summary") {
           const res = await fetch(`${apiUrl}/reports/gst-summary?${getDateQuery()}`, fetchOpts);
           if (res.ok && !ignore) setGstData(await res.json());
@@ -535,107 +531,7 @@ function ReportsContent() {
           )}
 
           {/* ========================================================= */}
-          {/* 3. EXPENSES STATEMENT REPORT */}
-          {/* ========================================================= */}
-          {activeTab === "expenses-statement" && expensesData && (
-            <div className="space-y-6">
-              {/* Summary Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
-                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Total Business Expenses</p>
-                  <h3 className="text-2xl font-black text-gray-900 mt-1">
-                    ₹{(expensesData.summary?.totalExpenses || 0).toLocaleString("en-IN")}
-                  </h3>
-                  <p className="text-[11px] text-gray-400 mt-1">Operating expenditure</p>
-                </div>
-
-                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
-                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Expense Entries</p>
-                  <h3 className="text-2xl font-black text-gray-900 mt-1">
-                    {expensesData.summary?.totalCount || 0}
-                  </h3>
-                  <p className="text-[11px] text-gray-400 mt-1">Incurred transactions</p>
-                </div>
-
-                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
-                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Average Expense Size</p>
-                  <h3 className="text-2xl font-black text-amber-600 mt-1">
-                    ₹{(expensesData.summary?.averageExpense || 0).toLocaleString("en-IN")}
-                  </h3>
-                  <p className="text-[11px] text-amber-600/80 mt-1">Per transaction avg</p>
-                </div>
-
-                <div className="bg-white p-5 rounded-2xl border border-[#e2e8f0] shadow-xs">
-                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Top Category</p>
-                  <h3 className="text-lg font-black text-gray-900 mt-1 truncate">
-                    {expensesData.summary?.categoryBreakdown?.[0]?.category || "General Operations"}
-                  </h3>
-                  <p className="text-[11px] text-gray-400 mt-1">
-                    ₹{(expensesData.summary?.categoryBreakdown?.[0]?.amount || 0).toLocaleString("en-IN")}
-                  </p>
-                </div>
-              </div>
-
-              {/* Expenses Table */}
-              <div className="bg-white rounded-2xl border border-[#e2e8f0] shadow-xs overflow-hidden">
-                <div className="p-4 px-6 border-b border-[#e2e8f0] flex justify-between items-center bg-gray-50/50">
-                  <h3 className="text-sm font-black text-gray-800">Business Expenses Statement</h3>
-                  <span className="text-xs text-gray-500 font-medium">View-Only</span>
-                </div>
-
-                {expensesData.records?.length === 0 ? (
-                  <div className="p-12 text-center text-gray-400 text-sm">
-                    No expense records found for this date range.
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[650px] text-left text-xs">
-                      <thead className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-[#e2e8f0]">
-                        <tr>
-                          <th className="py-3 px-6">Expense Date</th>
-                          <th className="py-3 px-6">Category</th>
-                          <th className="py-3 px-6">Description</th>
-                          <th className="py-3 px-6 text-right">Amount (₹)</th>
-                          <th className="py-3 px-6 text-center">Payment Mode</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {expensesData.records.map((r: any) => (
-                          <tr key={r.id} className="hover:bg-gray-50/60 transition-colors">
-                            <td className="py-3.5 px-6 text-gray-500 font-medium">{r.expense_date}</td>
-                            <td className="py-3.5 px-6 font-semibold text-gray-800">
-                              <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-[11px]">
-                                {r.category}
-                              </span>
-                            </td>
-                            <td className="py-3.5 px-6 text-gray-700">{r.description}</td>
-                            <td className="py-3.5 px-6 text-right font-black text-gray-900">
-                              ₹{r.amount.toLocaleString("en-IN")}
-                            </td>
-                            <td className="py-3.5 px-6 text-center text-gray-600 font-medium">
-                              {r.payment_mode}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="bg-gray-50/80 font-black text-xs text-gray-900 border-t border-[#e2e8f0]">
-                        <tr>
-                          <td className="py-3 px-6" colSpan={3}>Total Expenses for Selected Period:</td>
-                          <td className="py-3 px-6 text-right text-[#0260de]">
-                            ₹{expensesData.summary?.totalExpenses?.toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-3 px-6"></td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ========================================================= */}
-          {/* 4. GST SUMMARY REPORT */}
+          {/* 3. GST SUMMARY REPORT */}
           {/* ========================================================= */}
           {activeTab === "gst-summary" && gstData && (
             <div className="space-y-6">

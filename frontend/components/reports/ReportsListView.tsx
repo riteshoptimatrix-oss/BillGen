@@ -5,7 +5,6 @@ import React, { useState, useMemo } from "react";
 export type ReportTab =
   | "sales-register"
   | "purchase-register"
-  | "expenses-statement"
   | "gst-summary"
   | "stock-statement"
   | "profit-loss"
@@ -56,24 +55,9 @@ export const REPORT_DEFINITIONS: ReportItemMeta[] = [
     updateFrequency: "Real-time"
   },
   {
-    id: "expenses-statement",
-    index: "03",
-    label: "3. Expenses Statement",
-    category: "Operational Overheads",
-    categoryColor: "bg-amber-50 text-amber-700 border-amber-200",
-    description:
-      "Itemized statement of plant overheads, utilities, machinery servicing, factory maintenance, logistics, and petty cash expenditures categorized by operational head.",
-    tags: ["Workshop Overheads", "Petty Cash", "Utilities & Logistics", "Payment Modes"],
-    iconBg: "bg-amber-100/80 text-amber-700 border-amber-200",
-    iconColor: "text-amber-600",
-    iconPath:
-      "M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z",
-    updateFrequency: "Real-time"
-  },
-  {
     id: "gst-summary",
-    index: "04",
-    label: "4. GST Summary",
+    index: "03",
+    label: "3. GST Summary",
     category: "Taxation & Compliance",
     categoryColor: "bg-purple-50 text-purple-700 border-purple-200",
     description:
@@ -87,8 +71,8 @@ export const REPORT_DEFINITIONS: ReportItemMeta[] = [
   },
   {
     id: "stock-statement",
-    index: "05",
-    label: "5. Stock Statement",
+    index: "04",
+    label: "4. Stock Statement",
     category: "Inventory & Plant",
     categoryColor: "bg-cyan-50 text-cyan-700 border-cyan-200",
     description:
@@ -102,8 +86,8 @@ export const REPORT_DEFINITIONS: ReportItemMeta[] = [
   },
   {
     id: "profit-loss",
-    index: "06",
-    label: "6. Profit & Loss",
+    index: "05",
+    label: "5. Profit & Loss",
     category: "Financial Performance",
     categoryColor: "bg-indigo-50 text-indigo-700 border-indigo-200",
     description:
@@ -117,8 +101,8 @@ export const REPORT_DEFINITIONS: ReportItemMeta[] = [
   },
   {
     id: "labour-payroll",
-    index: "07",
-    label: "7. Labour Payroll",
+    index: "06",
+    label: "6. Labour Payroll",
     category: "Human Resources",
     categoryColor: "bg-rose-50 text-rose-700 border-rose-200",
     description:
@@ -141,7 +125,7 @@ export default function ReportsListView({ onSelectReport }: ReportsListViewProps
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
   const categories = [
-    { id: "all", label: "All Statements (7)" },
+    { id: "all", label: "All Statements (6)" },
     { id: "revenue", label: "Sales & Purchases" },
     { id: "tax", label: "Taxes & Financials" },
     { id: "operations", label: "Inventory & Labour" }
@@ -153,7 +137,7 @@ export default function ReportsListView({ onSelectReport }: ReportsListViewProps
       if (selectedCategory === "revenue") {
         if (report.id !== "sales-register" && report.id !== "purchase-register") return false;
       } else if (selectedCategory === "tax") {
-        if (report.id !== "gst-summary" && report.id !== "profit-loss" && report.id !== "expenses-statement")
+        if (report.id !== "gst-summary" && report.id !== "profit-loss")
           return false;
       } else if (selectedCategory === "operations") {
         if (report.id !== "stock-statement" && report.id !== "labour-payroll") return false;
@@ -184,7 +168,7 @@ export default function ReportsListView({ onSelectReport }: ReportsListViewProps
                 Financial Reports Directory
               </span>
               <span className="text-xs font-semibold text-slate-500 bg-white border border-slate-200 px-2.5 py-0.5 rounded-full">
-                7 Statements Available
+                6 Statements Available
               </span>
             </div>
             <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-2">
