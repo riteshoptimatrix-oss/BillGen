@@ -121,8 +121,8 @@ async def get_monthly_salaries(
     
     # 1. Fetch existing salary records for the selected month & year
     existing_salaries = await db["salaries"].find({
-        "month": cur_month,
-        "year": cur_year
+        "month": {"$in": [cur_month, str(cur_month)]},
+        "year": {"$in": [cur_year, str(cur_year)]}
     }).to_list(1000)
     
     existing_by_labour = {str(s["labour_id"]): s for s in existing_salaries}
@@ -243,17 +243,79 @@ async def update_salary_record(
     payload: SalaryUpdate = Body(...),
     user: Optional[Dict[str, Any]] = Depends(get_optional_user)
 ) -> Dict[str, Any]:
-    if not ObjectId.is_valid(salary_id):
-        raise HTTPException(status_code=400, detail="Invalid Salary Record ID format")
-    
     db = request.app.mongodb
-    existing = await db["salaries"].find_one({"_id": ObjectId(salary_id)})
-    if not existing:
-        raise HTTPException(status_code=404, detail="Salary record not found")
-
-    update_dict = {k: v for k, v in payload.model_dump().items() if v is not None}
     now = datetime.now()
+
+    target_month = int(payload.month) if payload.month and 1 <= payload.month <= 12 else now.month
+    target_year = int(payload.year) if payload.year and payload.year > 2000 else now.year
+
+    existing = None
+    # 1. Search directly by _id in salaries collection
+    if ObjectId.is_valid(salary_id):
+        existing = await db["salaries"].find_one({"_id": ObjectId(salary_id)})
+
+    # 2. If not found, salary_id might be a labourer ID, or payload.labour_id was supplied
+    if not existing:
+        lid_candidate = payload.labour_id or salary_id
+
+        # Search existing salary by labour_id and (month, year)
+        existing = await db["salaries"].find_one({
+            "labour_id": lid_candidate,
+            "month": {"$in": [target_month, str(target_month)]},
+            "year": {"$in": [target_year, str(target_year)]}
+        })
+
+        if not existing:
+            # Look up labour details in `labours` collection
+            labour_query = [{"labour_id": lid_candidate}]
+            if ObjectId.is_valid(lid_candidate):
+                labour_query.append({"_id": ObjectId(lid_candidate)})
+            
+            labour = await db["labours"].find_one({"$or": labour_query})
+            if labour:
+                real_lid = str(labour["_id"])
+                # Check again with real ObjectId string
+                existing = await db["salaries"].find_one({
+                    "labour_id": real_lid,
+                    "month": {"$in": [target_month, str(target_month)]},
+                    "year": {"$in": [target_year, str(target_year)]}
+                })
+                if not existing:
+                    # Dynamically create monthly salary record for this worker
+                    salary_doc = {
+                        "labour_id": real_lid,
+                        "labour_custom_id": labour.get("labour_id") or f"LAB-{real_lid[-4:].upper()}",
+                        "labour_name": labour.get("name", "Staff Member"),
+                        "work_type": labour.get("work_type", "Full Time"),
+                        "month": target_month,
+                        "year": target_year,
+                        "salary_amount": float(payload.salary_amount if payload.salary_amount is not None else labour.get("salary", 0.0)),
+                        "status": payload.status or "Pending",
+                        "payment_date": payload.payment_date,
+                        "payment_mode": payload.payment_mode or "Bank Transfer (NEFT)",
+                        "notes": payload.notes or "",
+                        "created_at": now.isoformat(),
+                        "updated_at": now.isoformat()
+                    }
+                    res = await db["salaries"].insert_one(salary_doc)
+                    salary_doc["_id"] = res.inserted_id
+                    existing = salary_doc
+
+    if not existing:
+        raise HTTPException(status_code=404, detail="Salary record or labourer not found")
+
+    actual_id = existing["_id"]
+    update_dict = {
+        k: v for k, v in payload.model_dump().items()
+        if v is not None and k not in ["labour_id", "month", "year"]
+    }
     update_dict["updated_at"] = now.isoformat()
+
+    # Ensure month & year are stored as integers
+    if "month" not in existing or not isinstance(existing.get("month"), int):
+        update_dict["month"] = target_month
+    if "year" not in existing or not isinstance(existing.get("year"), int):
+        update_dict["year"] = target_year
 
     # If marked as Paid and payment_date is not set, auto-record today's date
     if update_dict.get("status") == "Paid":
@@ -275,11 +337,11 @@ async def update_salary_record(
             pass
 
     await db["salaries"].update_one(
-        {"_id": ObjectId(salary_id)},
+        {"_id": actual_id},
         {"$set": update_dict}
     )
 
-    updated = await db["salaries"].find_one({"_id": ObjectId(salary_id)})
+    updated = await db["salaries"].find_one({"_id": actual_id})
 
     # Real-Time Broadcast Notification
     try:

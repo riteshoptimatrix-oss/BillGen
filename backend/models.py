@@ -492,6 +492,9 @@ class SalaryBase(BaseModel):
     notes: Optional[str] = None
 
 class SalaryUpdate(BaseModel):
+    labour_id: Optional[str] = None
+    month: Optional[int] = None
+    year: Optional[int] = None
     salary_amount: Optional[float] = None
     status: Optional[str] = None
     payment_date: Optional[str] = None

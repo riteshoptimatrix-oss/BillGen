@@ -126,7 +126,7 @@ export default function SalaryModule({ initialLabours = [] }: { initialLabours?:
     { value: 12, name: "December" },
   ];
 
-  const years = [currentYear - 1, currentYear, currentYear + 1];
+  const years = [currentYear - 2, currentYear - 1, currentYear, currentYear + 1, currentYear + 2];
 
   // Robust fallback: Generates active staff salary entries if server ledger is empty or syncing
   const populateFromLabourList = useCallback((labourList: any[]) => {
@@ -211,9 +211,28 @@ export default function SalaryModule({ initialLabours = [] }: { initialLabours?:
       const fallbackRes = await fetch(`${apiUrl}/labours/`, { headers, credentials: "include" });
       if (fallbackRes.ok) {
         const staffList = await fallbackRes.json();
-        populateFromLabourList(staffList);
-      } else if (initialLabours && initialLabours.length > 0) {
+        if (Array.isArray(staffList) && staffList.length > 0) {
+          populateFromLabourList(staffList);
+          return;
+        }
+      }
+      if (initialLabours && initialLabours.length > 0) {
         populateFromLabourList(initialLabours);
+      } else {
+        setRecords([]);
+        setSummary({
+          totalLabourers: 0,
+          totalSalary: 0,
+          totalPaid: 0,
+          totalPending: 0,
+          paidCount: 0,
+          pendingCount: 0,
+        });
+        setReminder({
+          isActive: false,
+          message: "",
+          pendingLabourers: [],
+        });
       }
     } catch (err) {
       console.error("Failed to load salary ledger", err);
@@ -243,6 +262,39 @@ export default function SalaryModule({ initialLabours = [] }: { initialLabours?:
     const nextStatus = record.status === "Paid" ? "Pending" : "Paid";
     const todayStr = new Date().toISOString().split("T")[0];
 
+    // Optimistic UI update
+    setRecords((prev) =>
+      prev.map((r) =>
+        r.id === record.id || (record.labour_id && r.labour_id === record.labour_id)
+          ? {
+              ...r,
+              status: nextStatus,
+              payment_date: nextStatus === "Paid" ? todayStr : null,
+            }
+          : r
+      )
+    );
+    setSummary((prev) => {
+      const amt = record.salary_amount;
+      if (nextStatus === "Paid") {
+        return {
+          ...prev,
+          totalPaid: prev.totalPaid + amt,
+          totalPending: Math.max(0, prev.totalPending - amt),
+          paidCount: prev.paidCount + 1,
+          pendingCount: Math.max(0, prev.pendingCount - 1),
+        };
+      } else {
+        return {
+          ...prev,
+          totalPaid: Math.max(0, prev.totalPaid - amt),
+          totalPending: prev.totalPending + amt,
+          paidCount: Math.max(0, prev.paidCount - 1),
+          pendingCount: prev.pendingCount + 1,
+        };
+      }
+    });
+
     try {
       const apiUrl = getApiUrl();
       const token = getAuthToken();
@@ -251,17 +303,33 @@ export default function SalaryModule({ initialLabours = [] }: { initialLabours?:
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
 
-      const res = await fetch(`${apiUrl}/labours/salaries/${record.id}`, {
+      const targetId = record.id || record.labour_id;
+      const res = await fetch(`${apiUrl}/labours/salaries/${targetId}`, {
         method: "PUT",
         headers,
         credentials: "include",
         body: JSON.stringify({
+          labour_id: record.labour_id || record.id,
+          month: selectedMonth,
+          year: selectedYear,
           status: nextStatus,
           payment_date: nextStatus === "Paid" ? todayStr : null,
+          salary_amount: record.salary_amount,
+          payment_mode: record.payment_mode || "Bank Transfer (NEFT)",
         }),
       });
 
       if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.record) {
+          setRecords((prev) =>
+            prev.map((r) =>
+              r.id === record.id || (record.labour_id && r.labour_id === record.labour_id)
+                ? { ...r, ...data.record, id: data.record.id }
+                : r
+            )
+          );
+        }
         showToast(
           nextStatus === "Paid"
             ? `✓ Salary of ₹${record.salary_amount.toLocaleString("en-IN")} marked as Paid for ${record.labour_name}`
@@ -270,10 +338,12 @@ export default function SalaryModule({ initialLabours = [] }: { initialLabours?:
         fetchSalaries();
       } else {
         showToast("Failed to update salary status");
+        fetchSalaries();
       }
     } catch (err) {
       console.error("Quick toggle error", err);
       showToast("Network error while updating salary");
+      fetchSalaries();
     }
   };
 
@@ -291,6 +361,26 @@ export default function SalaryModule({ initialLabours = [] }: { initialLabours?:
     if (!editingRecord) return;
     setIsUpdating(true);
 
+    const updatedAmt = Number(editSalaryAmt) || 0;
+    const updatedStatus = editStatus;
+    const updatedDate = updatedStatus === "Paid" ? editPaymentDate : null;
+    const updatedMode = editPaymentMode;
+
+    // Optimistic UI update
+    setRecords((prev) =>
+      prev.map((r) =>
+        r.id === editingRecord.id || (editingRecord.labour_id && r.labour_id === editingRecord.labour_id)
+          ? {
+              ...r,
+              salary_amount: updatedAmt,
+              status: updatedStatus,
+              payment_date: updatedDate,
+              payment_mode: updatedMode,
+            }
+          : r
+      )
+    );
+
     try {
       const apiUrl = getApiUrl();
       const token = getAuthToken();
@@ -299,28 +389,45 @@ export default function SalaryModule({ initialLabours = [] }: { initialLabours?:
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
 
-      const res = await fetch(`${apiUrl}/labours/salaries/${editingRecord.id}`, {
+      const targetId = editingRecord.id || editingRecord.labour_id;
+      const res = await fetch(`${apiUrl}/labours/salaries/${targetId}`, {
         method: "PUT",
         headers,
         credentials: "include",
         body: JSON.stringify({
-          salary_amount: Number(editSalaryAmt) || 0,
-          status: editStatus,
-          payment_date: editStatus === "Paid" ? editPaymentDate : null,
-          payment_mode: editPaymentMode,
+          labour_id: editingRecord.labour_id || editingRecord.id,
+          month: selectedMonth,
+          year: selectedYear,
+          salary_amount: updatedAmt,
+          status: updatedStatus,
+          payment_date: updatedDate,
+          payment_mode: updatedMode,
         }),
       });
 
       if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.record) {
+          setRecords((prev) =>
+            prev.map((r) =>
+              r.id === editingRecord.id || (editingRecord.labour_id && r.labour_id === editingRecord.labour_id)
+                ? { ...r, ...data.record, id: data.record.id }
+                : r
+            )
+          );
+        }
         showToast(`✓ Salary details updated for ${editingRecord.labour_name}`);
         setEditingRecord(null);
         fetchSalaries();
       } else {
-        showToast("Failed to update salary details");
+        const errData = await res.json().catch(() => null);
+        showToast(errData?.detail || "Failed to update salary details");
+        fetchSalaries();
       }
     } catch (err) {
       console.error("Save edit error", err);
       showToast("Error updating salary details");
+      fetchSalaries();
     } finally {
       setIsUpdating(false);
     }
