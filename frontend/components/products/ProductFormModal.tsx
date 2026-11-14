@@ -4,7 +4,6 @@ import { useState, useRef } from "react";
 import { getApiUrl, formatImageUrl } from "@/lib/api";
 import {
   Product,
-  ERP_CATEGORIES,
   ERP_UNITS,
   GST_RATES,
   formatINR
@@ -71,7 +70,7 @@ function ProductFormContent({
   // Form Fields State initialized directly from props
   const [name, setName] = useState(productToEdit?.name || "");
   const [sku, setSku] = useState(productToEdit?.sku || "");
-  const [category, setCategory] = useState<string>(productToEdit?.category || "Chassis & Frame");
+  const [category, setCategory] = useState<string>(productToEdit?.category || "General");
   const [description, setDescription] = useState(productToEdit?.description || "");
 
   // Images
@@ -377,7 +376,7 @@ function ProductFormContent({
                 </div>
 
                 {/* SKU / Product ID */}
-                <div>
+                <div className="md:col-span-2">
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     SKU / Product Code
                   </label>
@@ -391,24 +390,6 @@ function ProductFormContent({
                   <p className="text-[10px] text-slate-400 mt-1">
                     Leave blank to auto-generate PRD-XXXX
                   </p>
-                </div>
-
-                {/* Category */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Category <span className="text-rose-500">*</span>
-                  </label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full bg-slate-50/70 border border-slate-200/90 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-900 focus:outline-none focus:bg-white focus:border-[#0260de] cursor-pointer"
-                  >
-                    {ERP_CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
                 </div>
 
                 {/* Description */}

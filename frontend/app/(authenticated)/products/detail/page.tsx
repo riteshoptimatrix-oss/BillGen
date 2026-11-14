@@ -9,7 +9,6 @@ import {
   formatINR,
   getProductSku,
   getStockStatus,
-  ERP_CATEGORIES,
   ERP_UNITS,
   GST_RATES
 } from "@/components/products/types";
@@ -617,25 +616,8 @@ function ProductDetailContent() {
             </div>
           </div>
 
-          {/* Category, Unit, HSN, Tax Grid */}
+          {/* Unit, HSN, Tax Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Category
-              </label>
-              <select
-                value={formData.category}
-                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full bg-slate-50/70 border border-slate-200/90 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-900 focus:outline-none focus:bg-white focus:border-[#0260de] cursor-pointer"
-              >
-                {ERP_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">
                 Unit of Measurement
