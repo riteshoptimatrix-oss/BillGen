@@ -486,11 +486,16 @@ async def record_invoice_payment(
     else:
         new_status = "Pending"
 
+    existing_payments = invoice.get("payments")
+    if not isinstance(existing_payments, list):
+        existing_payments = []
+    updated_payments = existing_payments + [pay_doc]
+
     await db["invoices"].update_one(
         {"_id": ObjectId(id)},
         {
-            "$push": {"payments": pay_doc},
             "$set": {
+                "payments": updated_payments,
                 "amount_paid": new_paid,
                 "balance_due": new_balance,
                 "paid_percentage": new_pct,
@@ -540,7 +545,9 @@ async def delete_invoice_payment(
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
 
-    existing_payments = invoice.get("payments", [])
+    existing_payments = invoice.get("payments")
+    if not isinstance(existing_payments, list):
+        existing_payments = []
     filtered_payments = [p for p in existing_payments if p.get("id") != payment_id]
 
     if len(filtered_payments) == len(existing_payments):

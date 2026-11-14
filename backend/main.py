@@ -450,22 +450,40 @@ async def logout(response: Response):
 # ==============================================================================
 # 6. GLOBAL SANITIZED EXCEPTION HANDLERS
 # ==============================================================================
+def get_cors_headers(request: Request) -> Dict[str, str]:
+    origin = request.headers.get("origin")
+    allowed = [
+        "https://smart-erp-testing.netlify.app",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000"
+    ]
+    if origin and (origin in allowed or "netlify.app" in origin or "localhost" in origin or "127.0.0.1" in origin):
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true"
+        }
+    return {}
+
 @app.exception_handler(HTTPException)
 async def custom_http_exception_handler(request: Request, exc: HTTPException):
     """Standardized error responses without internal leakages."""
+    cors_hdrs = get_cors_headers(request)
+    headers = {**(exc.headers or {}), **cors_hdrs}
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail, "error": True},
-        headers=exc.headers or {}
+        headers=headers
     )
 
 @app.exception_handler(Exception)
 async def global_unhandled_exception_handler(request: Request, exc: Exception):
     """Log server errors internally and return sanitized response to clients."""
     logger.error(f"Unhandled server error on {request.method} {request.url.path}: {str(exc)}", exc_info=True)
+    cors_hdrs = get_cors_headers(request)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": f"Server error: {str(exc)}", "error": True}
+        content={"detail": f"Server error: {str(exc)}", "error": True},
+        headers=cors_hdrs
     )
 
 if __name__ == "__main__":
