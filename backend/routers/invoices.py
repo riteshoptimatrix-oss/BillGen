@@ -304,6 +304,19 @@ async def update_invoice(
     invoice_dict = {k: v for k, v in invoice.model_dump().items() if v is not None}
 
     if len(invoice_dict) >= 1:
+        existing_inv = await request.app.mongodb["invoices"].find_one({"_id": ObjectId(id)})
+        tot = float(invoice_dict.get("amount", existing_inv.get("amount", 0.0) if existing_inv else 0.0))
+        paid = float(invoice_dict.get("amount_paid", existing_inv.get("amount_paid", 0.0) if existing_inv else 0.0))
+        bal = max(0.0, round(tot - paid, 2))
+        pct = round((paid / tot * 100), 1) if tot > 0 else (100.0 if paid > 0 else 0.0)
+
+        invoice_dict["balance_due"] = bal
+        invoice_dict["paid_percentage"] = pct
+        if bal <= 0 and paid > 0:
+            invoice_dict["status"] = "Paid"
+        elif paid > 0 and bal > 0:
+            invoice_dict["status"] = "Partially Paid"
+
         await request.app.mongodb["invoices"].update_one(
             {"_id": ObjectId(id)}, {"$set": invoice_dict}
         )

@@ -18,6 +18,7 @@ interface InvoiceItem {
   tax_rate: number;
   total: number;
   image?: string;
+  hsn?: string;
 }
 
 interface PaymentTransaction {
@@ -106,8 +107,9 @@ export default function BillInvoicePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
 
-  // Create Modal State
+  // Create / Edit Modal State
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
@@ -934,6 +936,7 @@ export default function BillInvoicePage() {
 
   // Open Create Modal
   const openCreateModal = async () => {
+    setEditingInvoiceId(null);
     try {
       const res = await fetch(`${apiUrl}/invoices/next-number`);
       if (res.ok) {
@@ -973,6 +976,64 @@ export default function BillInvoicePage() {
 
     setFormDiscount(0);
     setFormAmountPaid(0);
+
+    setIsPreviewOpen(false);
+    setIsCreateOpen(true);
+  };
+
+  // Open Edit Modal for an existing invoice
+  const openEditModal = (inv: Invoice) => {
+    const invId = (inv._id || inv.id) as string;
+    setEditingInvoiceId(invId);
+    setFormInvoiceNumber(inv.invoice_number || "");
+
+    setFormClient(inv.client || "");
+    setFormCustomerPhone(inv.customer_phone || "");
+    setFormCustomerGst(inv.customer_gst || "");
+    setFormCustomerEmail(inv.customer_email || "");
+    setFormCustomerAddress(inv.customer_address || "");
+
+    const matchedCustomer = customers.find(
+      (c) => c.name.toLowerCase() === (inv.client || "").toLowerCase()
+    );
+    setSelectedCustomerId(matchedCustomer?._id || "");
+
+    setFormDate(inv.date || new Date().toISOString().split("T")[0]);
+    setFormPaymentTerms(inv.payment_terms || "15 Days");
+    setCustomTermsDays(inv.payment_terms_days || 15);
+    setFormDueDate(inv.due_date || "");
+    setFormPaymentMethod(inv.payment_method || "Bank Transfer");
+    setFormPlaceOfSupply(inv.place_of_supply || "Intra-State (Within Gujarat - CGST+SGST)");
+    setFormTaxRate(inv.tax_percent ?? 18);
+    setFormDiscount(inv.discount_amount ?? 0);
+    setFormStatus(inv.status === "Overdue" ? "Overdue" : inv.status === "Paid" ? "Paid" : "Pending");
+    setFormAmountPaid(inv.amount_paid ?? 0);
+
+    const rawItems: InvoiceItem[] = (inv.items || []).map((it) => ({
+      product_id: it.product_id,
+      product_name: it.product_name || it.description || "Product Item",
+      description: it.description || it.product_name || "",
+      hsn: (it as any).hsn || "HSN8708",
+      quantity: Number(it.quantity) || 1,
+      unit_price: Number(it.unit_price) || 0,
+      tax_rate: Number(it.tax_rate ?? inv.tax_percent ?? 18),
+      total: Number(it.total) || (Number(it.quantity) || 1) * (Number(it.unit_price) || 0),
+      image: it.image || "",
+    }));
+    setItems(rawItems);
+
+    setFormBankName(inv.bank_name || "");
+    setFormAccountHolder(inv.account_holder_name || "");
+    setFormAccountNumber(inv.account_number || "");
+    setFormIfscCode(inv.ifsc_code || "");
+    setFormBranchName(inv.branch_name || "");
+    setFormAccountType(inv.account_type || "Current");
+
+    setFormNotes(inv.notes || "");
+
+    setSelectedProductToAdd(null);
+    setQtyToAdd(1);
+    setStockWarning(null);
 
     setIsPreviewOpen(false);
     setIsCreateOpen(true);
@@ -1046,24 +1107,39 @@ export default function BillInvoicePage() {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch(`${apiUrl}/invoices/`, {
-        method: "POST",
-        headers,
-        credentials: "include",
-        body: JSON.stringify(payload)
-      });
+      let res: Response;
+      if (editingInvoiceId) {
+        res = await fetch(`${apiUrl}/invoices/${editingInvoiceId}`, {
+          method: "PUT",
+          headers,
+          credentials: "include",
+          body: JSON.stringify(payload)
+        });
+      } else {
+        res = await fetch(`${apiUrl}/invoices/`, {
+          method: "POST",
+          headers,
+          credentials: "include",
+          body: JSON.stringify(payload)
+        });
+      }
 
       if (res.ok) {
-        const createdInvoice = await res.json();
-        showToast(`Invoice ${createdInvoice.invoice_number} generated & stock updated successfully!`);
+        const savedInvoice = await res.json();
+        showToast(
+          editingInvoiceId
+            ? `Invoice ${savedInvoice.invoice_number || formInvoiceNumber} updated successfully!`
+            : `Invoice ${savedInvoice.invoice_number} generated & stock updated successfully!`
+        );
         await Promise.all([fetchInvoices(), fetchCustomersAndProducts()]);
         setIsCreateOpen(false);
         setIsPreviewOpen(false);
-        // Automatically open the finalized invoice for printing/download
-        setViewInvoice(createdInvoice);
+        setEditingInvoiceId(null);
+        // Automatically open the saved invoice for printing/download
+        setViewInvoice(savedInvoice);
       } else {
-        const err = await res.json();
-        alert(err.detail || "Failed to generate invoice.");
+        const err = await res.json().catch(() => ({ detail: "Failed to save invoice" }));
+        alert(err.detail || "Failed to save invoice.");
       }
     } catch (e) {
       console.error("Save invoice error:", e);
@@ -1363,6 +1439,17 @@ export default function BillInvoicePage() {
                       <td className="py-3.5 px-6 text-right whitespace-nowrap space-x-1.5">
                         <button
                           type="button"
+                          onClick={() => openEditModal(inv)}
+                          className="px-2.5 py-1 text-[11px] font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg transition-all inline-flex items-center gap-1 shadow-2xs active:scale-95 cursor-pointer"
+                          title={`Edit Invoice ${inv.invoice_number}`}
+                        >
+                          <svg className="w-3 h-3 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => openPaymentModal(inv)}
                           className="px-2.5 py-1 text-[11px] font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg transition-all inline-flex items-center gap-1 shadow-2xs active:scale-95 cursor-pointer"
                           title="Record payment received from client"
@@ -1412,17 +1499,22 @@ export default function BillInvoicePage() {
             <div className="flex justify-between items-start border-b border-[#e2e8f0] pb-4 mb-6">
               <div>
                 <span className="text-[11px] font-bold text-[#0260de] bg-[#0260de]/10 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                  Professional Bill &amp; Invoice Builder
+                  {editingInvoiceId ? "Edit Manufacturing Invoice" : "Professional Bill & Invoice Builder"}
                 </span>
                 <h2 className="text-xl font-black text-gray-900 mt-1.5 tracking-tight">
-                  Generate Manufacturing Invoice
+                  {editingInvoiceId ? `Edit Invoice: ${formInvoiceNumber}` : "Generate Manufacturing Invoice"}
                 </h2>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Select customer, choose products from inventory, verify automatic tax &amp; due date, and preview before generating.
+                  {editingInvoiceId
+                    ? "Update customer details, items, pricing, tax, or bank information for this invoice."
+                    : "Select customer, choose products from inventory, verify automatic tax & due date, and preview before generating."}
                 </p>
               </div>
               <button
-                onClick={() => setIsCreateOpen(false)}
+                onClick={() => {
+                  setIsCreateOpen(false);
+                  setEditingInvoiceId(null);
+                }}
                 className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 font-bold transition-colors"
               >
                 ✕
@@ -2182,7 +2274,9 @@ export default function BillInvoicePage() {
                   disabled={isSubmitting || items.length === 0 || !formClient.trim()}
                   className="px-6 py-2.5 bg-[#0260de] hover:bg-[#0252bf] text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-500/10 disabled:opacity-40 transition-all flex items-center justify-center gap-2 w-full sm:w-auto"
                 >
-                  {isSubmitting ? "Finalizing & Updating Stock..." : "Generate Invoice & Update Stock"}
+                  {isSubmitting
+                    ? (editingInvoiceId ? "Updating Invoice..." : "Finalizing & Updating Stock...")
+                    : (editingInvoiceId ? "Save & Update Invoice" : "Generate Invoice & Update Stock")}
                 </button>
               </div>
             </div>
@@ -2361,7 +2455,9 @@ export default function BillInvoicePage() {
                 disabled={isSubmitting}
                 className="px-6 py-2 bg-[#0260de] hover:bg-[#0252bf] text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-500/10 disabled:opacity-50 transition-all"
               >
-                {isSubmitting ? "Finalizing..." : "Confirm & Finalize Invoice"}
+                {isSubmitting
+                  ? (editingInvoiceId ? "Updating..." : "Finalizing...")
+                  : (editingInvoiceId ? "Confirm & Update Invoice" : "Confirm & Finalize Invoice")}
               </button>
             </div>
           </div>
@@ -2390,6 +2486,22 @@ export default function BillInvoicePage() {
                     <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.665-.699c.983.537 1.839.814 2.795.814 3.179 0 5.766-2.587 5.767-5.766.002-3.18-2.585-5.766-5.767-5.766zm3.376 8.21c-.144.405-.837.774-1.17.824-.312.045-.697.072-2.148-.528-1.749-.724-2.88-2.5-2.967-2.617-.087-.116-.708-.941-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.299.144.347.491 1.2.534 1.287.043.087.072.188.014.303-.058.116-.087.188-.173.289l-.26.303c-.087.087-.178.182-.077.355.101.173.45.742.965 1.202.664.593 1.224.776 1.397.863.173.087.275.072.376-.043.101-.116.433-.506.549-.679.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.043.072.043.419-.101.824z" />
                   </svg>
                   <span>Share on WhatsApp</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const toEdit = viewInvoice;
+                    setViewInvoice(null);
+                    openEditModal(toEdit);
+                  }}
+                  className="px-3.5 py-2 text-xs font-bold text-white bg-[#0260de] hover:bg-[#0252bf] rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95"
+                  title={`Edit Invoice ${viewInvoice.invoice_number}`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  <span>Edit Invoice</span>
                 </button>
 
                 <button
