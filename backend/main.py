@@ -35,7 +35,8 @@ from routers import (
     finance,
     reports,
     notifications,
-    settings
+    settings,
+    auth
 )
 
 # Load environment configuration
@@ -62,11 +63,12 @@ async def lifespan(app: FastAPI):
         "connectTimeoutMS": 10000,
         "socketTimeoutMS": 20000,
     }
-    try:
-        import certifi
-        client_kwargs["tlsCAFile"] = certifi.where()
-    except Exception as e:
-        logger.warning(f"Could not load certifi CA file: {e}")
+    if "mongodb+srv" in mongodb_url or "ssl=true" in mongodb_url.lower() or "tls=true" in mongodb_url.lower():
+        try:
+            import certifi
+            client_kwargs["tlsCAFile"] = certifi.where()
+        except Exception as e:
+            logger.warning(f"Could not load certifi CA file: {e}")
 
     app.mongodb_client = AsyncIOMotorClient(mongodb_url, **client_kwargs)
     app.mongodb = app.mongodb_client.get_database(db_name)
@@ -94,8 +96,11 @@ async def lifespan(app: FastAPI):
         await app.mongodb["notifications"].create_index([("is_read", 1)], background=True)
         await app.mongodb["uploaded_files"].create_index([("filename", 1)], unique=True, background=True)
         logger.info("MongoDB Atlas performance indexes verified/initialized.")
+
+        # Ensure default system users (shaileshbhai123@gmail.com and admin)
+        await auth.ensure_default_system_users(app.mongodb)
     except Exception as idx_err:
-        logger.warning(f"MongoDB Atlas index notice: {idx_err}")
+        logger.warning(f"MongoDB Atlas initialization notice: {idx_err}")
 
     yield
     app.mongodb_client.close()
@@ -327,6 +332,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 # ==============================================================================
 # 4. API ROUTERS
 # ==============================================================================
+app.include_router(auth.router)
 app.include_router(products.router)
 app.include_router(labours.router)
 app.include_router(dashboard.router)
@@ -339,17 +345,8 @@ app.include_router(notifications.router)
 app.include_router(settings.router)
 
 # ==============================================================================
-# 5. AUTHENTICATION SCHEMAS & ENDPOINTS
+# 5. HEALTH CHECK ENDPOINTS
 # ==============================================================================
-class LoginRequest(BaseModel):
-    email: EmailStr = Field(..., description="Registered user email address")
-    password: str = Field(..., min_length=4, max_length=128, description="User password")
-
-class LoginResponse(BaseModel):
-    status: str
-    token: str
-    user: Dict[str, Any]
-
 @app.get("/", tags=["health"])
 @app.get("/api/health", tags=["health"])
 @app.get("/api/ping", tags=["health"])
@@ -359,93 +356,6 @@ def read_root():
         "service": "SiddhiVinayak Enterprise Billing API",
         "version": "2.5"
     }
-
-@app.post("/api/auth/login", response_model=LoginResponse, tags=["auth"])
-async def login(credentials: LoginRequest, request: Request, response: Response):
-    """
-    Secure login endpoint:
-    - Enforces IP-based brute-force throttling (max 5 failed attempts per min).
-    - Verifies credentials using bcrypt cryptographic hashes.
-    - Issues cryptographically signed HS256 JWT access tokens.
-    - Sets secure SameSite cookies in addition to returning token in payload.
-    """
-    client_ip = request.client.host if request.client else "unknown"
-    
-    # 1. Check rate limit
-    check_login_rate_limit(client_ip)
-    
-    email = credentials.email.strip().lower()
-    password = credentials.password
-    
-    # 2. Check credentials against configured admin or database
-    is_valid = False
-    admin_email = DEFAULT_ADMIN_EMAIL.strip().lower()
-    
-    if email == admin_email:
-        # Verify via bcrypt hash
-        if verify_password(password, DEFAULT_ADMIN_PASSWORD_HASH):
-            is_valid = True
-        # Environment override if configured in production
-        elif os.getenv("ADMIN_PASSWORD") and password == os.getenv("ADMIN_PASSWORD"):
-            is_valid = True
-            
-    if not is_valid:
-        record_failed_login(client_ip)
-        logger.warning(f"Failed login attempt for user '{email}' from IP: {client_ip}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password. Please verify your credentials.",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-        
-    # Reset attempt tracker upon success
-    reset_login_attempts(client_ip)
-    logger.info(f"Successful authenticated session established for: {email} ({client_ip})")
-    
-    # 3. Create signed JWT access token
-    token = create_access_token(data={
-        "sub": email,
-        "role": "admin",
-        "name": "SiddhiVinayak Admin"
-    })
-    
-    # 4. Set HttpOnly cookie for defense-in-depth against XSS token harvesting
-    # Automatically harden for HTTPS production (Netlify / Render cross-origin)
-    is_production = os.getenv("ENVIRONMENT", "development").lower() in ["production", "prod"] or os.getenv("RENDER") is not None
-    response.set_cookie(
-        key="access_token",
-        value=token,
-        httponly=True,
-        samesite="none" if is_production else "lax",
-        secure=True if is_production else False,
-        max_age=86400  # 24 hours
-    )
-    
-    return {
-        "status": "success",
-        "token": token,
-        "user": {
-            "email": email,
-            "role": "admin",
-            "name": "SiddhiVinayak Admin"
-        }
-    }
-
-@app.get("/api/auth/me", tags=["auth"])
-async def get_current_user_profile(user: Dict[str, Any] = Depends(get_current_user)):
-    """Validates active JWT token and returns verified identity profile."""
-    return {"status": "authenticated", "user": user}
-
-@app.post("/api/auth/logout", tags=["auth"])
-async def logout(response: Response):
-    """Clear session authentication cookies with production-aware flags."""
-    is_production = os.getenv("ENVIRONMENT", "development").lower() in ["production", "prod"] or os.getenv("RENDER") is not None
-    response.delete_cookie(
-        key="access_token",
-        samesite="none" if is_production else "lax",
-        secure=True if is_production else False
-    )
-    return {"status": "success", "message": "Logged out successfully."}
 
 # ==============================================================================
 # 6. GLOBAL SANITIZED EXCEPTION HANDLERS

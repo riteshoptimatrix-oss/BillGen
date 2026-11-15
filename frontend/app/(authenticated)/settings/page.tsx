@@ -15,6 +15,8 @@ import {
   Lock,
   Key,
   ShieldAlert,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 type SettingsTab = "company" | "invoice" | "tax" | "bank" | "security";
@@ -92,9 +94,36 @@ export default function SettingsPage() {
 
   // 5. User Account & Security
   const [securitySettings, setSecuritySettings] = useState(DEFAULT_SECURITY_SETTINGS);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Load persisted settings on mount (from Database with localStorage fallback)
   useEffect(() => {
+    // 0. Fetch real authenticated user profile to display current user's email
+    const fetchUserProfile = async () => {
+      try {
+        const apiUrl = getApiUrl();
+        const token = getAuthToken();
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await fetch(`${apiUrl}/auth/me`, { headers, credentials: "include" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.user && data.user.email) {
+            setSecuritySettings((prev) => ({
+              ...prev,
+              adminEmail: data.user.email,
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn("User profile fetch notice:", err);
+      }
+    };
+    fetchUserProfile();
     // 1. Initial fast load from local cache
     try {
       const savedCompany = localStorage.getItem("sve_company_settings");
@@ -266,29 +295,61 @@ export default function SettingsPage() {
     }
   };
 
-  const handlePasswordUpdate = (e: React.FormEvent) => {
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
     if (!securitySettings.currentPassword.trim()) {
-      alert("Please enter your current password.");
+      setPasswordError("Please enter your current password.");
       return;
     }
     if (!securitySettings.newPassword || securitySettings.newPassword.length < 6) {
-      alert("New password must be at least 6 characters.");
+      setPasswordError("New password must be at least 6 characters long.");
       return;
     }
     if (securitySettings.newPassword !== securitySettings.confirmPassword) {
-      alert("New password and confirm password do not match.");
+      setPasswordError("New password and confirm password do not match.");
       return;
     }
 
-    // Success simulation and credential update
-    setSecuritySettings((prev) => ({
-      ...prev,
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    }));
-    showToast("✓ Administrator password changed successfully!");
+    setIsChangingPassword(true);
+    try {
+      const apiUrl = getApiUrl();
+      const token = getAuthToken();
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+      const res = await fetch(`${apiUrl}/auth/change-password`, {
+        method: "POST",
+        headers,
+        credentials: "include",
+        body: JSON.stringify({
+          current_password: securitySettings.currentPassword,
+          new_password: securitySettings.newPassword
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || "Failed to update password. Please check your current password.");
+      }
+
+      setSecuritySettings((prev) => ({
+        ...prev,
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      }));
+      setPasswordSuccess("✓ Password changed successfully!");
+      showToast("✓ Password changed successfully!");
+    } catch (err: any) {
+      setPasswordError(err.message || "Failed to update password. Please check your credentials.");
+      showToast(`⚠ ${err.message || "Failed to update password"}`);
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   const tabs = [
@@ -959,56 +1020,111 @@ export default function SettingsPage() {
 
               {/* Password Change Card */}
               <div className="p-5 bg-gradient-to-br from-[#f8fafc] to-white rounded-2xl border border-[#e2e8f0] space-y-4">
-                <div className="flex items-center gap-2 text-xs font-bold text-[#0f172a]">
-                  <Lock className="w-4 h-4 text-[#0260de]" />
-                  <span>Update Admin Password</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold text-[#0f172a]">
+                    <Lock className="w-4 h-4 text-[#0260de]" />
+                    <span>Change Account Password</span>
+                  </div>
+                  <span className="text-[10px] text-[#64748b]">Encrypted via bcrypt hash</span>
                 </div>
+
+                {passwordError && (
+                  <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-medium flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-red-500 shrink-0" />
+                    <span>{passwordError}</span>
+                  </div>
+                )}
+
+                {passwordSuccess && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-medium flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{passwordSuccess}</span>
+                  </div>
+                )}
+
                 <form onSubmit={handlePasswordUpdate} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-[#64748b] mb-1">
                         Current Password
                       </label>
-                      <input
-                        type="password"
-                        placeholder="••••••••"
-                        value={securitySettings.currentPassword}
-                        onChange={(e) => setSecuritySettings({ ...securitySettings, currentPassword: e.target.value })}
-                        className="w-full px-3.5 py-2 bg-white border border-[#e2e8f0] rounded-xl text-xs font-medium text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showCurrentPassword ? "text" : "password"}
+                          placeholder="Current password"
+                          value={securitySettings.currentPassword}
+                          onChange={(e) => setSecuritySettings({ ...securitySettings, currentPassword: e.target.value })}
+                          className="w-full pl-3.5 pr-9 py-2 bg-white border border-[#e2e8f0] rounded-xl text-xs font-medium text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                          className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none cursor-pointer"
+                        >
+                          {showCurrentPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-[#64748b] mb-1">
                         New Password
                       </label>
-                      <input
-                        type="password"
-                        placeholder="Min. 6 chars"
-                        value={securitySettings.newPassword}
-                        onChange={(e) => setSecuritySettings({ ...securitySettings, newPassword: e.target.value })}
-                        className="w-full px-3.5 py-2 bg-white border border-[#e2e8f0] rounded-xl text-xs font-medium text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showNewPassword ? "text" : "password"}
+                          placeholder="Min. 6 chars"
+                          value={securitySettings.newPassword}
+                          onChange={(e) => setSecuritySettings({ ...securitySettings, newPassword: e.target.value })}
+                          className="w-full pl-3.5 pr-9 py-2 bg-white border border-[#e2e8f0] rounded-xl text-xs font-medium text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none cursor-pointer"
+                        >
+                          {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold uppercase tracking-wider text-[#64748b] mb-1">
                         Confirm New Password
                       </label>
-                      <input
-                        type="password"
-                        placeholder="Confirm password"
-                        value={securitySettings.confirmPassword}
-                        onChange={(e) => setSecuritySettings({ ...securitySettings, confirmPassword: e.target.value })}
-                        className="w-full px-3.5 py-2 bg-white border border-[#e2e8f0] rounded-xl text-xs font-medium text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showConfirmPassword ? "text" : "password"}
+                          placeholder="Confirm new password"
+                          value={securitySettings.confirmPassword}
+                          onChange={(e) => setSecuritySettings({ ...securitySettings, confirmPassword: e.target.value })}
+                          className="w-full pl-3.5 pr-9 py-2 bg-white border border-[#e2e8f0] rounded-xl text-xs font-medium text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none cursor-pointer"
+                        >
+                          {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
                     </div>
                   </div>
                   <div className="flex justify-end">
                     <button
                       type="submit"
-                      className="flex items-center gap-1.5 px-4 py-2 bg-white border border-[#e2e8f0] hover:bg-[#0260de] hover:text-white hover:border-[#0260de] text-[#0f172a] font-bold text-xs rounded-xl shadow-2xs transition-all cursor-pointer active:scale-95"
+                      disabled={isChangingPassword}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-[#0260de] hover:bg-[#0252bf] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer active:scale-95 disabled:opacity-50"
                     >
-                      <Key className="w-3.5 h-3.5" />
-                      <span>Update Password</span>
+                      {isChangingPassword ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <span>Updating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Key className="w-3.5 h-3.5" />
+                          <span>Update Password</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </form>

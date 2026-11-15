@@ -178,6 +178,34 @@ def reset_login_attempts(client_ip: str):
     if client_ip in _login_attempts:
         del _login_attempts[client_ip]
 
+# Rate limiting for password reset requests (prevents email spamming and enumeration)
+_forgot_password_attempts: Dict[str, list] = {}
+
+def check_forgot_password_rate_limit(client_ip: str, max_attempts: int = 5, window_seconds: int = 900):
+    """
+    Enforce rate limiting on password reset requests:
+    Allows up to max_attempts (5) within window_seconds (15 mins) per client IP.
+    """
+    now = time.time()
+    attempts = _forgot_password_attempts.get(client_ip, [])
+    attempts = [t for t in attempts if now - t < window_seconds]
+    _forgot_password_attempts[client_ip] = attempts
+
+    if len(attempts) >= max_attempts:
+        retry_after = int(window_seconds - (now - attempts[0]))
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many password reset requests. Please wait {max(retry_after, 10)} seconds before requesting again.",
+            headers={"Retry-After": str(max(retry_after, 10))}
+        )
+
+def record_forgot_password_attempt(client_ip: str):
+    """Record a password reset request attempt for the client IP."""
+    now = time.time()
+    if client_ip not in _forgot_password_attempts:
+        _forgot_password_attempts[client_ip] = []
+    _forgot_password_attempts[client_ip].append(now)
+
 # ==============================================================================
 # Safe File Upload Validation (MIME type, Extensions & Magic Bytes)
 # ==============================================================================

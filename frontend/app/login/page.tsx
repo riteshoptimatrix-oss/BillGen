@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { getApiUrl, setAuthToken, warmupBackend } from "@/lib/api";
 
 export default function LoginPage() {
@@ -213,9 +214,12 @@ export default function LoginPage() {
               </div>
 
               <div className="text-sm">
-                <a href="#" className="font-semibold text-red-600 hover:text-red-500">
+                <Link
+                  href="/forgot-password"
+                  className="font-semibold text-[#0260de] hover:text-[#0252bf] transition-colors"
+                >
                   Forgot password?
-                </a>
+                </Link>
               </div>
             </div>
 

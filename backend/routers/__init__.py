@@ -8,6 +8,7 @@ from . import (
     finance,
     reports,
     notifications,
-    settings
+    settings,
+    auth
 )
 
