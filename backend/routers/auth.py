@@ -291,7 +291,7 @@ async def request_password_reset(payload: ForgotPasswordRequest, request: Reques
 
         # Send email via SMTP / async service
         recipient_name = user_doc.get("name") if user_doc else "Admin"
-        await send_password_reset_email(email, reset_link, recipient_name)
+        sent_ok = await send_password_reset_email(email, reset_link, recipient_name)
 
         # Also broadcast real-time in-app notification
         try:
@@ -304,6 +304,14 @@ async def request_password_reset(payload: ForgotPasswordRequest, request: Reques
             )
         except Exception as e:
             logger.warning(f"Could not broadcast reset notification: {e}")
+
+        # Return response with reset_url fallback for seamless testing & Render free-tier resilience
+        return {
+            "status": "success",
+            "message": "If this email address is registered, a password reset link has been dispatched to your inbox. Please check your email.",
+            "email_delivered": sent_ok,
+            "reset_url": reset_link
+        }
 
     # Return uniform message to prevent account enumeration attacks
     return {

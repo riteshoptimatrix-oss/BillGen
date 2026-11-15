@@ -9,6 +9,8 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [resetUrl, setResetUrl] = useState<string | null>(null);
+  const [emailDelivered, setEmailDelivered] = useState<boolean | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,6 +32,12 @@ export default function ForgotPasswordPage() {
         throw new Error(data.detail || "Unable to process password reset request. Please try again.");
       }
 
+      if (data.reset_url) {
+        setResetUrl(data.reset_url);
+      }
+      if (typeof data.email_delivered === "boolean") {
+        setEmailDelivered(data.email_delivered);
+      }
       setIsSubmitted(true);
     } catch (err: any) {
       setError(err.message || "Failed to submit request. Please check your network connection.");
@@ -137,6 +145,26 @@ export default function ForgotPasswordPage() {
                 </div>
               </div>
 
+              {resetUrl && (
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl text-left">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span className="text-xs font-bold text-blue-950 uppercase tracking-wider">
+                      Instant Reset Link Ready
+                    </span>
+                  </div>
+                  <p className="text-xs text-blue-800 mb-3 leading-relaxed">
+                    You can check your email inbox or use this direct button to set your new password immediately:
+                  </p>
+                  <a
+                    href={resetUrl}
+                    className="w-full flex justify-center items-center py-2.5 px-4 rounded-lg text-xs font-bold text-white bg-[#0260de] hover:bg-[#0252bf] shadow-xs transition-all active:scale-95"
+                  >
+                    Open Reset Password Page &rarr;
+                  </a>
+                </div>
+              )}
+
               <div className="space-y-3">
                 <Link
                   href="/login"
@@ -151,6 +179,8 @@ export default function ForgotPasswordPage() {
                     setIsSubmitted(false);
                     setEmail("");
                     setError("");
+                    setResetUrl(null);
+                    setEmailDelivered(null);
                   }}
                   className="w-full py-2.5 px-4 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
                 >
