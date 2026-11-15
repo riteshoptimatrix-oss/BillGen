@@ -63,7 +63,7 @@ export default function LoginPage() {
             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center">
               <div className="w-4 h-4 bg-white rounded-full"></div>
             </div>
-            <span className="text-2xl font-bold text-gray-900 tracking-tight">BillGenerator</span>
+            <span className="text-2xl font-bold text-gray-900 tracking-tight">SmartERP</span>
           </div>
 
           <div className="inline-flex items-center px-3 py-1 rounded-full border border-blue-100 bg-white shadow-sm text-xs font-semibold text-blue-700 mb-8 uppercase tracking-wider">
@@ -80,7 +80,7 @@ export default function LoginPage() {
           </h1>
 
           <p className="text-lg text-gray-600 mb-12 max-w-lg">
-            Join BillGenerator to create professional invoices, manage products, and automate your financial reports at scale.
+            Join SmartERP to create professional invoices, manage products, and automate your financial reports at scale.
           </p>
 
           <div className="space-y-6">
@@ -119,7 +119,7 @@ export default function LoginPage() {
           </div>
           
           <div className="mt-20 text-xs text-gray-400">
-            © 2026 BillGenerator • Enterprise Financial Platform
+            © 2026 SmartERP • Enterprise Financial Platform
           </div>
         </div>
       </div>

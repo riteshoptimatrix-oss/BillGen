@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bill Generator Dashboard",
+  title: "SmartERP Dashboard",
   description: "Manage your bills, products, and finance.",
 };
 
