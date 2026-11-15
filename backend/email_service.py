@@ -144,9 +144,10 @@ def _send_via_resend(api_key: str, from_email: str, from_name: str, to_email: st
         url = "https://api.resend.com/emails"
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": "SmartERP/1.0 (Enterprise Billing)"
         }
-        sender = f"{from_name} <onboarding@resend.dev>" if "gmail.com" in from_email.lower() else f"{from_name} <{from_email}>"
+        sender = "SmartERP Billing <onboarding@resend.dev>"
         payload = {
             "from": sender,
             "to": [to_email],
@@ -158,6 +159,9 @@ def _send_via_resend(api_key: str, from_email: str, from_name: str, to_email: st
             if resp.status in (200, 201):
                 logger.info(f"✓ Password reset email successfully delivered to {to_email} via Resend HTTP API.")
                 return True
+    except urllib.error.HTTPError as http_err:
+        err_body = http_err.read().decode("utf-8", errors="ignore")
+        logger.warning(f"Resend HTTP delivery rejected ({http_err.code}): {err_body}")
     except Exception as exc:
         logger.warning(f"Resend HTTP delivery attempt failed: {exc}")
     return False
