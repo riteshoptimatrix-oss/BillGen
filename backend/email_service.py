@@ -297,9 +297,9 @@ def _send_smtp_sync(to_email: str, reset_link: str, recipient_name: Optional[str
         server = None
         try:
             if mode == "ssl":
-                server = IPv4SMTP_SSL(h, p, timeout=10)
+                server = IPv4SMTP_SSL(h, p, timeout=3)
             else:
-                server = IPv4SMTP(h, p, timeout=10)
+                server = IPv4SMTP(h, p, timeout=3)
                 if use_tls:
                     server.starttls()
 
