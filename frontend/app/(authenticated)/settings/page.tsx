@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { getApiUrl, getAuthToken } from "@/lib/api";
+import { getApiUrl, getAuthToken, setAuthToken } from "@/lib/api";
 import {
   Building2,
   FileSpreadsheet,
@@ -94,6 +94,11 @@ export default function SettingsPage() {
 
   // 5. User Account & Security
   const [securitySettings, setSecuritySettings] = useState(DEFAULT_SECURITY_SETTINGS);
+  const [initialUserEmail, setInitialUserEmail] = useState("");
+  const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
+  const [emailSuccess, setEmailSuccess] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
@@ -113,6 +118,7 @@ export default function SettingsPage() {
         if (res.ok) {
           const data = await res.json();
           if (data.user && data.user.email) {
+            setInitialUserEmail(data.user.email);
             setSecuritySettings((prev) => ({
               ...prev,
               adminEmail: data.user.email,
@@ -248,6 +254,9 @@ export default function SettingsPage() {
       });
 
       if (res.ok) {
+        if (tabName === "Security & Access Preferences" && securitySettings.adminEmail.trim().toLowerCase() !== initialUserEmail) {
+          await handleEmailUpdate();
+        }
         showToast(
           tabName
             ? `✓ ${tabName} updated & synchronized with database!`
@@ -292,6 +301,56 @@ export default function SettingsPage() {
         })
       );
       showToast("Security preferences reset to default.");
+    }
+  };
+
+  const handleEmailUpdate = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setEmailError(null);
+    setEmailSuccess(null);
+
+    const newEmail = securitySettings.adminEmail.trim().toLowerCase();
+    if (!newEmail || !newEmail.includes("@")) {
+      setEmailError("Please enter a valid email address.");
+      return;
+    }
+
+    if (newEmail === initialUserEmail) {
+      showToast("Email address is already current.");
+      return;
+    }
+
+    setIsUpdatingEmail(true);
+    try {
+      const apiUrl = getApiUrl();
+      const token = getAuthToken();
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
+      const res = await fetch(`${apiUrl}/auth/update-email`, {
+        method: "POST",
+        headers,
+        credentials: "include",
+        body: JSON.stringify({ new_email: newEmail })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || "Failed to update account email.");
+      }
+
+      if (data.token) {
+        setAuthToken(data.token);
+      }
+      setInitialUserEmail(data.email || newEmail);
+      setEmailSuccess(`✓ Email updated to ${data.email || newEmail}!`);
+      showToast(`✓ Account email updated to ${data.email || newEmail}!`);
+    } catch (err: any) {
+      setEmailError(err.message || "Failed to update email.");
+      showToast(`⚠ ${err.message || "Failed to update email"}`);
+    } finally {
+      setIsUpdatingEmail(false);
     }
   };
 
@@ -960,16 +1019,40 @@ export default function SettingsPage() {
 
               {/* Account & Session Preferences */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b] mb-1.5">
-                    Administrator Email
-                  </label>
-                  <input
-                    type="email"
-                    value={securitySettings.adminEmail}
-                    onChange={(e) => setSecuritySettings({ ...securitySettings, adminEmail: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-[#f8fafc] border border-[#e2e8f0] rounded-xl font-bold text-[#0f172a] text-xs focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
-                  />
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-[#64748b]">
+                      Account Login &amp; Recovery Email
+                    </label>
+                    <span className="text-[10px] text-[#64748b]">Used for login &amp; reset links</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      value={securitySettings.adminEmail}
+                      onChange={(e) => {
+                        setSecuritySettings({ ...securitySettings, adminEmail: e.target.value });
+                        setEmailError(null);
+                        setEmailSuccess(null);
+                      }}
+                      className="flex-1 px-4 py-2.5 bg-[#f8fafc] border border-[#e2e8f0] rounded-xl font-bold text-[#0f172a] text-xs focus:outline-none focus:ring-2 focus:ring-[#0260de]/20 focus:border-[#0260de]"
+                      placeholder="e.g. yourname@gmail.com"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleEmailUpdate()}
+                      disabled={isUpdatingEmail || !securitySettings.adminEmail || securitySettings.adminEmail.trim().toLowerCase() === initialUserEmail}
+                      className="px-4 py-2.5 bg-[#0260de] hover:bg-[#0252bf] text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                    >
+                      {isUpdatingEmail ? "Saving..." : "Update Email"}
+                    </button>
+                  </div>
+                  {emailSuccess && (
+                    <p className="text-[11px] font-semibold text-emerald-600 animate-in fade-in">{emailSuccess}</p>
+                  )}
+                  {emailError && (
+                    <p className="text-[11px] font-semibold text-rose-600 animate-in fade-in">{emailError}</p>
+                  )}
                 </div>
 
                 <div>

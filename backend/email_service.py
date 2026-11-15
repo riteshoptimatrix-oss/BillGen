@@ -4,21 +4,35 @@ import logging
 import asyncio
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Optional
+from typing import Optional, Dict, Any
 from dotenv import load_dotenv
 
 load_dotenv()
 
 logger = logging.getLogger("email_service")
 
-SMTP_HOST = os.getenv("SMTP_HOST", "")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER", "")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL") or SMTP_USER or "noreply@siddhivinayak.com"
-SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "SiddhiVinayak Enterprise Billing")
-SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() in ("true", "1", "yes")
-SMTP_USE_SSL = os.getenv("SMTP_USE_SSL", "false").lower() in ("true", "1", "yes") or SMTP_PORT == 465
+
+def get_smtp_config() -> Dict[str, Any]:
+    """Retrieve dynamic SMTP settings from environment with intelligent defaults."""
+    user = os.getenv("SMTP_USERNAME") or os.getenv("SMTP_USER") or "ritesh.work.1510@gmail.com"
+    password = os.getenv("SMTP_PASSWORD") or os.getenv("SMTP_PASS") or "sais rdqc kdye fdxo"
+    host = os.getenv("SMTP_HOST") or "smtp.gmail.com"
+    port = int(os.getenv("SMTP_PORT", "587"))
+    from_email = os.getenv("SMTP_FROM_EMAIL") or user or "ritesh.work.1510@gmail.com"
+    from_name = os.getenv("SMTP_FROM_NAME", "SmartERP Billing")
+    use_tls = os.getenv("SMTP_USE_TLS", "true").lower() in ("true", "1", "yes")
+    use_ssl = os.getenv("SMTP_USE_SSL", "false").lower() in ("true", "1", "yes") or port == 465
+
+    return {
+        "host": host,
+        "port": port,
+        "user": user,
+        "password": password,
+        "from_email": from_email,
+        "from_name": from_name,
+        "use_tls": use_tls,
+        "use_ssl": use_ssl
+    }
 
 
 def _build_html_email(to_email: str, reset_link: str, recipient_name: Optional[str] = None) -> str:
@@ -28,7 +42,7 @@ def _build_html_email(to_email: str, reset_link: str, recipient_name: Optional[s
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Password Reset Request</title>
+  <title>Reset Your SmartERP Password</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f4f7fc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b;">
   <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f4f7fc; padding: 40px 15px;">
@@ -45,8 +59,8 @@ def _build_html_email(to_email: str, reset_link: str, recipient_name: Optional[s
                     <span style="color: #0260de; font-weight: 900; font-size: 18px; letter-spacing: -0.5px;">SV</span>
                   </td>
                   <td style="padding-left: 14px; text-align: left;">
-                    <div style="color: #ffffff; font-size: 18px; font-weight: 800; letter-spacing: -0.2px;">SiddhiVinayak</div>
-                    <div style="color: #bfdbfe; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">Enterprise Billing ERP</div>
+                    <div style="color: #ffffff; font-size: 18px; font-weight: 800; letter-spacing: -0.2px;">SmartERP</div>
+                    <div style="color: #bfdbfe; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">SiddhiVinayak Enterprise</div>
                   </td>
                 </tr>
               </table>
@@ -57,40 +71,42 @@ def _build_html_email(to_email: str, reset_link: str, recipient_name: Optional[s
           <tr>
             <td style="padding: 36px 32px;">
               <h1 style="margin: 0 0 16px; font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px;">
-                Password Reset Request
+                Reset Your Password
               </h1>
               <p style="margin: 0 0 16px; font-size: 14px; line-height: 22px; color: #475569;">
                 Hello <strong>{display_name}</strong>,
               </p>
               <p style="margin: 0 0 24px; font-size: 14px; line-height: 22px; color: #475569;">
-                We received a request to reset the password for your account associated with <strong>{to_email}</strong>. Click the button below to choose a new password:
+                We received a request to reset the password for your account (<strong>{to_email}</strong>). Click the button below to choose a new password:
               </p>
 
               <!-- CTA Button -->
-              <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 28px 0;">
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 28px 0; width: 100%;">
                 <tr>
-                  <td align="center" style="border-radius: 12px; background-color: #0260de;">
-                    <a href="{reset_link}" target="_blank" style="display: inline-block; padding: 14px 28px; font-size: 14px; font-weight: 700; color: #ffffff; text-decoration: none; border-radius: 12px; letter-spacing: 0.2px;">
-                      Reset Password &rarr;
+                  <td align="center">
+                    <a href="{reset_link}" target="_blank" style="display: inline-block; padding: 15px 32px; font-size: 15px; font-weight: 700; color: #ffffff; background-color: #0260de; text-decoration: none; border-radius: 12px; letter-spacing: 0.2px; box-shadow: 0 2px 6px rgba(2, 96, 222, 0.35);">
+                      Reset My Password &rarr;
                     </a>
                   </td>
                 </tr>
               </table>
 
-              <!-- Expiry & Security Notice -->
-              <div style="background-color: #f8fafc; border-left: 4px solid #0260de; border-radius: 8px; padding: 14px 16px; margin: 24px 0;">
-                <p style="margin: 0; font-size: 12px; line-height: 18px; color: #64748b;">
-                  <strong>Security Notice:</strong> This reset link is valid for <strong>20 minutes</strong> and can only be used once. If you did not request a password change, you can safely ignore this email &mdash; your account is completely secure.
+              <!-- Direct Clickable URL -->
+              <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin: 24px 0;">
+                <p style="margin: 0 0 8px; font-size: 12px; font-weight: 700; color: #475569;">
+                  Direct Password Reset Link:
+                </p>
+                <p style="margin: 0; word-break: break-all; font-size: 12px; line-height: 18px;">
+                  <a href="{reset_link}" target="_blank" style="color: #0260de; font-weight: 600; text-decoration: underline;">{reset_link}</a>
                 </p>
               </div>
 
-              <!-- Fallback URL -->
-              <p style="margin: 24px 0 0; font-size: 12px; line-height: 18px; color: #94a3b8;">
-                If the button above does not work, copy and paste this link into your web browser:
-              </p>
-              <p style="margin: 6px 0 0; word-break: break-all; font-size: 12px; line-height: 18px;">
-                <a href="{reset_link}" style="color: #0260de; text-decoration: underline;">{reset_link}</a>
-              </p>
+              <!-- Security Notice -->
+              <div style="background-color: #eff6ff; border-left: 4px solid #0260de; border-radius: 8px; padding: 14px 16px; margin: 24px 0;">
+                <p style="margin: 0; font-size: 12px; line-height: 18px; color: #1e40af;">
+                  <strong>Security Reminder:</strong> This link is strictly single-use and will expire in <strong>20 minutes</strong>. If you did not make this request, you can safely ignore this email &mdash; your account remains secure.
+                </p>
+              </div>
             </td>
           </tr>
 
@@ -98,10 +114,7 @@ def _build_html_email(to_email: str, reset_link: str, recipient_name: Optional[s
           <tr>
             <td style="padding: 24px 32px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
               <p style="margin: 0; font-size: 12px; color: #94a3b8;">
-                &copy; 2026 SiddhiVinayak Enterprise. All rights reserved.
-              </p>
-              <p style="margin: 6px 0 0; font-size: 11px; color: #94a3b8;">
-                High-Performance 3-Wheeler Commercial Vehicles &bull; Automated Enterprise Billing
+                &copy; 2026 SmartERP &bull; SiddhiVinayak Enterprise Billing Platform
               </p>
             </td>
           </tr>
@@ -116,9 +129,19 @@ def _build_html_email(to_email: str, reset_link: str, recipient_name: Optional[s
 
 def _send_smtp_sync(to_email: str, reset_link: str, recipient_name: Optional[str] = None) -> bool:
     """Synchronous worker that connects to SMTP host and transmits the email."""
-    if not SMTP_HOST or not SMTP_USER:
+    cfg = get_smtp_config()
+    host = cfg["host"]
+    port = cfg["port"]
+    user = cfg["user"]
+    password = cfg["password"]
+    from_email = cfg["from_email"]
+    from_name = cfg["from_name"]
+    use_tls = cfg["use_tls"]
+    use_ssl = cfg["use_ssl"]
+
+    if not host or not user:
         logger.info(
-            f"📧 [PASSWORD RESET LINK] (SMTP not configured, logging link for dev/testing)\n"
+            f"📧 [PASSWORD RESET LINK] (SMTP host/user not fully configured, logging link for testing)\n"
             f"Recipient: {to_email}\n"
             f"Reset URL: {reset_link}\n"
         )
@@ -126,14 +149,14 @@ def _send_smtp_sync(to_email: str, reset_link: str, recipient_name: Optional[str
 
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = "Password Reset Request - SiddhiVinayak Enterprise Billing"
-        msg["From"] = f"{SMTP_FROM_NAME} <{SMTP_FROM_EMAIL}>"
+        msg["Subject"] = "Password Reset Request - SmartERP Billing"
+        msg["From"] = f"{from_name} <{from_email}>"
         msg["To"] = to_email
 
         plain_text = (
             f"Hello,\n\n"
-            f"We received a request to reset your password for SiddhiVinayak Enterprise Billing.\n\n"
-            f"Please visit this link to set a new password:\n{reset_link}\n\n"
+            f"We received a request to reset your password for SmartERP (SiddhiVinayak Enterprise Billing).\n\n"
+            f"Please visit the following link to set your new password:\n{reset_link}\n\n"
             f"This link will expire in 20 minutes and can only be used once.\n\n"
             f"If you did not request this, please ignore this email.\n"
         )
@@ -142,19 +165,24 @@ def _send_smtp_sync(to_email: str, reset_link: str, recipient_name: Optional[str
         msg.attach(MIMEText(plain_text, "plain", "utf-8"))
         msg.attach(MIMEText(html_content, "html", "utf-8"))
 
-        if SMTP_USE_SSL:
-            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=10)
+        if use_ssl:
+            server = smtplib.SMTP_SSL(host, port, timeout=12)
         else:
-            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
-            if SMTP_USE_TLS:
+            server = smtplib.SMTP(host, port, timeout=12)
+            if use_tls:
                 server.starttls()
 
-        if SMTP_PASSWORD:
-            server.login(SMTP_USER, SMTP_PASSWORD)
+        if password:
+            clean_password = password.replace(" ", "").strip() if "@gmail.com" in user.lower() else password
+            try:
+                server.login(user, clean_password)
+            except smtplib.SMTPAuthenticationError:
+                # Fallback to original raw password string
+                server.login(user, password)
 
-        server.sendmail(SMTP_FROM_EMAIL, [to_email], msg.as_string())
+        server.sendmail(from_email, [to_email], msg.as_string())
         server.quit()
-        logger.info(f"✓ Password reset email successfully delivered to {to_email} via SMTP ({SMTP_HOST}).")
+        logger.info(f"✓ Password reset email successfully delivered to {to_email} via SMTP ({host}:{port}).")
         return True
     except Exception as exc:
         logger.error(f"Failed to deliver password reset email via SMTP to {to_email}: {exc}")

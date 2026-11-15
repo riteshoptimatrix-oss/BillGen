@@ -51,6 +51,9 @@ class ChangePasswordRequest(BaseModel):
     current_password: str = Field(..., min_length=1, description="Current password")
     new_password: str = Field(..., min_length=6, max_length=128, description="New password")
 
+class UpdateEmailRequest(BaseModel):
+    new_email: EmailStr = Field(..., description="New email address for the account")
+
 class CreateUserRequest(BaseModel):
     email: EmailStr = Field(..., description="Email address for the new user")
     password: str = Field(..., min_length=6, max_length=128, description="Initial password")
@@ -511,6 +514,103 @@ async def change_password(
     }
 
 
+@router.post("/update-email")
+async def update_user_email(
+    payload: UpdateEmailRequest,
+    request: Request,
+    response: Response,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Allow authenticated user to change their account email address from their profile.
+    Checks for conflicts, updates MongoDB users collection, issues a fresh JWT,
+    and updates session cookie and client token.
+    """
+    old_email = current_user["email"].strip().lower()
+    new_email = payload.new_email.strip().lower()
+
+    if old_email == new_email:
+        return {
+            "status": "success",
+            "message": "Email is already set to this address.",
+            "email": new_email
+        }
+
+    db = request.app.mongodb
+
+    # Check if new email is already claimed by another user
+    existing = await db["users"].find_one({"email": new_email})
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"The email address '{new_email}' is already registered to another account."
+        )
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    # Update email in users collection
+    result = await db["users"].update_one(
+        {"email": old_email},
+        {"$set": {"email": new_email, "updated_at": now_iso}}
+    )
+
+    # If user was default admin not yet in collection, create/upsert
+    if result.matched_count == 0:
+        await db["users"].insert_one({
+            "email": new_email,
+            "name": current_user.get("name", "Admin"),
+            "password_hash": DEFAULT_ADMIN_PASSWORD_HASH,
+            "role": current_user.get("role", "admin"),
+            "status": "Active",
+            "created_at": now_iso,
+            "updated_at": now_iso
+        })
+
+    # Invalidate any old password reset tokens for the old email
+    await db["password_resets"].update_many(
+        {"email": old_email, "used": False},
+        {"$set": {"used": True, "invalidated_reason": "email_changed"}}
+    )
+
+    # Issue a fresh JWT access token with the updated email
+    new_token = create_access_token(data={
+        "sub": new_email,
+        "role": current_user.get("role", "admin"),
+        "name": current_user.get("name", "Authorized User")
+    })
+
+    # Set updated cookie
+    is_production = os.getenv("ENVIRONMENT", "development").lower() in ["production", "prod"] or os.getenv("RENDER") is not None
+    response.set_cookie(
+        key="access_token",
+        value=new_token,
+        httponly=True,
+        samesite="none" if is_production else "lax",
+        secure=True if is_production else False,
+        max_age=86400
+    )
+
+    try:
+        await broadcast_notification(
+            db,
+            title="Account Email Updated",
+            message=f"Account email updated from {old_email} to {new_email}.",
+            type="security",
+            link="/settings"
+        )
+    except Exception as e:
+        logger.warning(f"Could not broadcast email update notification: {e}")
+
+    logger.info(f"✓ User email updated from '{old_email}' to '{new_email}'")
+
+    return {
+        "status": "success",
+        "message": f"Account email updated to {new_email}.",
+        "token": new_token,
+        "email": new_email
+    }
+
+
 # ==============================================================================
 # USER MANAGEMENT (ADMIN ONLY)
 # ==============================================================================
@@ -568,3 +668,4 @@ async def create_user(
         "message": f"User '{email}' created successfully.",
         "user": new_user
     }
+
